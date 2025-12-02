@@ -137,11 +137,27 @@ const Community = () => {
         </p>
       </div>
 
-      {/* Safety Banner */}
-      <Card className="mb-6 bg-sage-100 border-sage-200 animate-fade-up animation-delay-100">
+      {/* Compose Card */}
+      <Card 
+        className="mb-6 cursor-pointer hover:shadow-card transition-all animate-fade-up animation-delay-100"
+        onClick={() => setIsPosting(true)}
+      >
         <CardContent className="flex items-center gap-3 p-4">
-          <Shield className="h-5 w-5 text-primary flex-shrink-0" />
-          <p className="text-sm text-foreground">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+            <EyeOff className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1">
+            <p className="text-muted-foreground">What's on your mind? Share with the community...</p>
+          </div>
+          <Send className="h-5 w-5 text-primary" />
+        </CardContent>
+      </Card>
+
+      {/* Safety Banner */}
+      <Card className="mb-4 bg-sage-100 border-sage-200 animate-fade-up animation-delay-150">
+        <CardContent className="flex items-center gap-3 p-3">
+          <Shield className="h-4 w-4 text-primary flex-shrink-0" />
+          <p className="text-xs text-foreground">
             This is a safe, supportive space. Be kind and respect everyone's journey.
           </p>
         </CardContent>
