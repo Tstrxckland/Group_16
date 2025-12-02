@@ -20,9 +20,13 @@ import {
   ExternalLink
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
@@ -209,7 +213,14 @@ const Profile = () => {
       <Button
         variant="outline"
         className="w-full mb-4"
-        onClick={() => navigate("/")}
+        onClick={async () => {
+          await signOut();
+          toast({
+            title: "Signed out",
+            description: "You've been signed out successfully.",
+          });
+          navigate("/");
+        }}
       >
         <LogOut className="h-4 w-4" />
         Sign Out
