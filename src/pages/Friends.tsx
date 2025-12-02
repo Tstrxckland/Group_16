@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, UserPlus, Users } from "lucide-react";
+import { Loader2, UserPlus, Users, MessageCircle } from "lucide-react";
+import { MessageThread } from "@/components/MessageThread";
 
 interface ProfileRow {
   id: string;
@@ -33,6 +34,10 @@ interface FriendRequest {
   createdAt: string;
 }
 
+interface FriendWithFriendshipId extends ProfileRow {
+  friendshipId: string;
+}
+
 const usernameSchema = z
   .string()
   .min(3, "Username must be at least 3 characters")
@@ -50,8 +55,9 @@ const Friends = () => {
   const [usernameInput, setUsernameInput] = useState("");
   const [friendUsername, setFriendUsername] = useState("");
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
-  const [friends, setFriends] = useState<ProfileRow[]>([]);
+  const [friends, setFriends] = useState<FriendWithFriendshipId[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState<{ friendshipId: string; friendName: string } | null>(null);
 
   const loadProfileAndFriends = useCallback(async () => {
     if (!user) return;
@@ -140,7 +146,16 @@ const Friends = () => {
 
       const uniqueFriendProfileIds = Array.from(new Set(friendProfileIds));
 
-      let friendProfiles: ProfileRow[] = [];
+      // Create a map of profile_id to friendship_id
+      const profileIdToFriendshipId: Record<string, string> = {};
+      [...(asRequester ?? []), ...(asAddressee ?? [])].forEach((f) => {
+        const friendProfileId = f.requester_profile_id === typedProfile.id 
+          ? f.addressee_profile_id 
+          : f.requester_profile_id;
+        profileIdToFriendshipId[friendProfileId as string] = f.id as string;
+      });
+
+      let friendProfiles: FriendWithFriendshipId[] = [];
       if (uniqueFriendProfileIds.length > 0) {
         const { data: friendProfilesData, error: friendsError } = await supabase
           .from("profiles")
@@ -148,7 +163,10 @@ const Friends = () => {
           .in("id", uniqueFriendProfileIds);
 
         if (friendsError) throw friendsError;
-        friendProfiles = (friendProfilesData ?? []) as ProfileRow[];
+        friendProfiles = (friendProfilesData ?? []).map((p) => ({
+          ...(p as ProfileRow),
+          friendshipId: profileIdToFriendshipId[p.id]
+        }));
       }
 
       setFriends(friendProfiles);
@@ -372,7 +390,7 @@ const Friends = () => {
     }
   };
 
-  const initialsForProfile = (p: ProfileRow) => {
+  const initialsForProfile = (p: ProfileRow | FriendWithFriendshipId) => {
     const name = p.display_name || p.username || "Friend";
     const parts = name.split(" ");
     if (parts.length >= 2) {
@@ -548,21 +566,35 @@ const Friends = () => {
                   {friends.map((friend) => (
                     <li
                       key={friend.id}
-                      className="flex items-center gap-3 rounded-xl bg-muted/60 p-3"
+                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3"
                     >
-                      <Avatar className="h-9 w-9">
-                        <AvatarFallback>{initialsForProfile(friend)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {friend.display_name || friend.username || "Friend"}
-                        </p>
-                        {friend.username && (
-                          <p className="text-xs text-muted-foreground">
-                            @{friend.username}
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarFallback>{initialsForProfile(friend)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {friend.display_name || friend.username || "Friend"}
                           </p>
-                        )}
+                          {friend.username && (
+                            <p className="text-xs text-muted-foreground">
+                              @{friend.username}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setSelectedFriend({
+                            friendshipId: friend.friendshipId,
+                            friendName: friend.display_name || friend.username || "Friend"
+                          })
+                        }
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -583,6 +615,19 @@ const Friends = () => {
             Refresh
           </Button>
         </div>
+
+        {selectedFriend && profile && (
+          <Card className="border-0 shadow-card">
+            <CardContent className="p-0 h-[500px]">
+              <MessageThread
+                friendshipId={selectedFriend.friendshipId}
+                friendName={selectedFriend.friendName}
+                myProfileId={profile.id}
+                onClose={() => setSelectedFriend(null)}
+              />
+            </CardContent>
+          </Card>
+        )}
       </section>
     </main>
   );
