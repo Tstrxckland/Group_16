@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      friendships: {
+        Row: {
+          accepted_at: string | null
+          addressee_profile_id: string
+          created_at: string
+          id: string
+          requester_profile_id: string
+          status: Database["public"]["Enums"]["friend_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          addressee_profile_id: string
+          created_at?: string
+          id?: string
+          requester_profile_id: string
+          status?: Database["public"]["Enums"]["friend_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          addressee_profile_id?: string
+          created_at?: string
+          id?: string
+          requester_profile_id?: string
+          status?: Database["public"]["Enums"]["friend_request_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_addressee_profile_id_fkey"
+            columns: ["addressee_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_requester_profile_id_fkey"
+            columns: ["requester_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -23,6 +68,7 @@ export type Database = {
           id: string
           updated_at: string
           user_id: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -32,6 +78,7 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -41,6 +88,7 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -52,7 +100,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      friend_request_status: "pending" | "accepted" | "declined" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -179,6 +227,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      friend_request_status: ["pending", "accepted", "declined", "blocked"],
+    },
   },
 } as const

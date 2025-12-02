@@ -14,6 +14,7 @@ import Challenges from "./pages/Challenges";
 import Calm from "./pages/Calm";
 import Journal from "./pages/Journal";
 import Community from "./pages/Community";
+import Friends from "./pages/Friends";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import AppLayout from "./components/layout/AppLayout";
@@ -42,6 +43,7 @@ const App = () => (
                 <Route path="/calm" element={<Calm />} />
                 <Route path="/journal" element={<Journal />} />
                 <Route path="/community" element={<Community />} />
+                <Route path="/friends" element={<Friends />} />
                 <Route path="/profile" element={<Profile />} />
               </Route>
             </Route>
