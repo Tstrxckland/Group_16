@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Target, 
   Check, 
@@ -108,6 +109,14 @@ const Challenges = () => {
     return c.difficulty.toLowerCase() === filter;
   });
 
+  const toggleChallenge = (id: string) => {
+    if (completedIds.includes(id)) {
+      setCompletedIds(completedIds.filter(cId => cId !== id));
+    } else {
+      setCompletedIds([...completedIds, id]);
+    }
+  };
+
   const completeChallenge = (id: string) => {
     if (!completedIds.includes(id)) {
       setCompletedIds([...completedIds, id]);
@@ -184,25 +193,19 @@ const Challenges = () => {
           return (
             <Card
               key={challenge.id}
-              className={`cursor-pointer transition-all ${
+              className={`transition-all ${
                 isCompleted ? "opacity-60" : "hover:shadow-card"
               }`}
-              onClick={() => !isCompleted && setSelectedChallenge(challenge)}
             >
               <CardContent className="flex items-center gap-4 p-4">
-                <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                    isCompleted ? "bg-primary text-primary-foreground" : "bg-muted"
-                  }`}
-                >
-                  {isCompleted ? (
-                    <Check className="h-6 w-6" />
-                  ) : (
-                    <Target className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className={`font-semibold ${isCompleted ? "line-through" : ""}`}>
+                <Checkbox
+                  checked={isCompleted}
+                  onCheckedChange={() => toggleChallenge(challenge.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-6 w-6 rounded-full border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                />
+                <div className="flex-1" onClick={() => !isCompleted && setSelectedChallenge(challenge)}>
+                  <p className={`font-semibold ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                     {challenge.title}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
