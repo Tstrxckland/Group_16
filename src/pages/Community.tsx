@@ -243,7 +243,7 @@ const Community = () => {
       {/* New Post Modal */}
       {isPosting && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 backdrop-blur-sm animate-fade-in">
-          <Card className="w-full max-w-lg rounded-b-none animate-slide-in-right">
+          <Card className="w-full max-w-lg rounded-b-none animate-slide-in-right pb-20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-primary" />
