@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import {
   Clock,
   Award
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Challenge {
   id: string;
@@ -98,9 +100,39 @@ const difficultyColors = {
 };
 
 const Challenges = () => {
+  const { user } = useAuth();
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
-  const [completedIds, setCompletedIds] = useState<string[]>(["1"]);
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<string>("all");
+
+  // Load completed challenges from database
+  useEffect(() => {
+    const loadCompletedChallenges = async () => {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('completed_challenges')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (data?.completed_challenges) {
+        setCompletedIds(data.completed_challenges);
+      }
+    };
+
+    loadCompletedChallenges();
+  }, [user]);
+
+  // Save completed challenges to database
+  const saveCompletedChallenges = async (newCompletedIds: string[]) => {
+    if (!user) return;
+    
+    await supabase
+      .from('profiles')
+      .update({ completed_challenges: newCompletedIds })
+      .eq('user_id', user.id);
+  };
 
   const filteredChallenges = challenges.filter(c => {
     if (filter === "all") return true;
@@ -110,16 +142,19 @@ const Challenges = () => {
   });
 
   const toggleChallenge = (id: string) => {
-    if (completedIds.includes(id)) {
-      setCompletedIds(completedIds.filter(cId => cId !== id));
-    } else {
-      setCompletedIds([...completedIds, id]);
-    }
+    const newCompletedIds = completedIds.includes(id)
+      ? completedIds.filter(cId => cId !== id)
+      : [...completedIds, id];
+    
+    setCompletedIds(newCompletedIds);
+    saveCompletedChallenges(newCompletedIds);
   };
 
   const completeChallenge = (id: string) => {
     if (!completedIds.includes(id)) {
-      setCompletedIds([...completedIds, id]);
+      const newCompletedIds = [...completedIds, id];
+      setCompletedIds(newCompletedIds);
+      saveCompletedChallenges(newCompletedIds);
     }
     setSelectedChallenge(null);
   };
