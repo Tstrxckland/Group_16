@@ -50,7 +50,7 @@ const Onboarding = () => {
     if (step < 2) {
       setStep(step + 1);
     } else {
-      navigate("/dashboard");
+      navigate("/auth");
     }
   };
 
