@@ -4,7 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -14,9 +15,12 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+    console.error(
+      "Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_ANON_KEY env vars",
+    );
     return new Response(JSON.stringify({ error: "Service misconfigured" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -33,7 +37,8 @@ serve(async (req) => {
     });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  // Client tied to the user JWT, used only to identify the current user
+  const supabaseUserClient = createClient(supabaseUrl, anonKey, {
     global: {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
@@ -43,11 +48,20 @@ serve(async (req) => {
     },
   });
 
+  // Admin client with service role key, used for privileged operations
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
   try {
+    // 1. Get the authenticated user via the JWT-bound client
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabaseUserClient.auth.getUser();
 
     if (userError || !user) {
       console.error("Error fetching user", userError);
@@ -59,8 +73,8 @@ serve(async (req) => {
 
     const userId = user.id;
 
-    // 1. Find profiles linked to this user
-    const { data: profiles, error: profilesError } = await supabase
+    // 2. Find profiles linked to this user (admin client bypasses RLS)
+    const { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("user_id", userId);
@@ -76,12 +90,12 @@ serve(async (req) => {
     const profileIds = (profiles ?? []).map((p: { id: string }) => p.id);
 
     if (profileIds.length > 0) {
-      // 2. Find friendships involving these profiles
-      const { data: friendships, error: friendshipsError } = await supabase
+      // 3. Find friendships involving these profiles
+      const { data: friendships, error: friendshipsError } = await supabaseAdmin
         .from("friendships")
         .select("id")
         .or(
-          `requester_profile_id.in.(${profileIds.join(",")}),addressee_profile_id.in.(${profileIds.join(",")})`
+          `requester_profile_id.in.(${profileIds.join(",")}),addressee_profile_id.in.(${profileIds.join(",")})`,
         );
 
       if (friendshipsError) {
@@ -91,15 +105,15 @@ serve(async (req) => {
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
       const friendshipIds = (friendships ?? []).map((f: { id: string }) => f.id);
 
-      // 3. Delete messages tied to these friendships or profiles
+      // 4. Delete messages tied to these friendships or profiles
       if (friendshipIds.length > 0) {
-        const { error: deleteMessagesByFriendshipError } = await supabase
+        const { error: deleteMessagesByFriendshipError } = await supabaseAdmin
           .from("messages")
           .delete()
           .in("friendship_id", friendshipIds);
@@ -114,12 +128,12 @@ serve(async (req) => {
             {
               status: 500,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
+            },
           );
         }
       }
 
-      const { error: deleteMessagesByProfileError } = await supabase
+      const { error: deleteMessagesByProfileError } = await supabaseAdmin
         .from("messages")
         .delete()
         .in("sender_profile_id", profileIds);
@@ -134,13 +148,13 @@ serve(async (req) => {
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
-      // 4. Delete friendships
+      // 5. Delete friendships
       if (friendshipIds.length > 0) {
-        const { error: deleteFriendshipsError } = await supabase
+        const { error: deleteFriendshipsError } = await supabaseAdmin
           .from("friendships")
           .delete()
           .in("id", friendshipIds);
@@ -152,13 +166,13 @@ serve(async (req) => {
             {
               status: 500,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
+            },
           );
         }
       }
 
-      // 5. Delete profiles
-      const { error: deleteProfilesError } = await supabase
+      // 6. Delete profiles
+      const { error: deleteProfilesError } = await supabaseAdmin
         .from("profiles")
         .delete()
         .in("id", profileIds);
@@ -170,20 +184,25 @@ serve(async (req) => {
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
     }
 
-    // 6. Delete the auth user (removes email/password)
-    const { error: deleteUserError } = await supabase.auth.admin.deleteUser(userId);
+    // 7. Delete the auth user (removes email/password)
+    const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(
+      userId,
+    );
 
     if (deleteUserError) {
       console.error("Error deleting auth user", deleteUserError);
-      return new Response(JSON.stringify({ error: "Failed to delete account" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Failed to delete account" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(JSON.stringify({ success: true }), {
