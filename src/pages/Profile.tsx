@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -24,13 +24,63 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+interface ProfileData {
+  id: string;
+  display_name: string | null;
+  is_anonymous: boolean;
+}
+
 const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, display_name, is_anonymous")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error loading profile:", error);
+      return;
+    }
+
+    if (data) {
+      setProfile(data);
+      setIsAnonymous(data.is_anonymous);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const handleAnonymousToggle = async (checked: boolean) => {
+    setIsAnonymous(checked);
+    if (!profile) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_anonymous: checked })
+      .eq("id", profile.id);
+
+    if (error) {
+      console.error("Error updating anonymous mode:", error);
+      toast({
+        title: "Couldn't save preference",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+      setIsAnonymous(!checked); // revert
+    }
+  };
 
   const stats = [
     { label: "Day Streak", value: 7, icon: Flame, color: "text-terracotta-400" },
@@ -70,12 +120,14 @@ const Profile = () => {
               {isAnonymous ? (
                 <EyeOff className="h-8 w-8 text-primary" />
               ) : (
-                <span className="text-2xl font-bold text-primary">M</span>
+                <span className="text-2xl font-bold text-primary">
+                  {(profile?.display_name || user?.email || "U")[0].toUpperCase()}
+                </span>
               )}
             </div>
             <div>
               <h2 className="text-xl font-semibold">
-                {isAnonymous ? "Anonymous User" : "Maya"}
+                {isAnonymous ? "Anonymous User" : (profile?.display_name || user?.email?.split("@")[0] || "User")}
               </h2>
               <p className="text-muted-foreground">Member since January 2024</p>
             </div>
@@ -126,7 +178,7 @@ const Profile = () => {
                 <p className="text-sm text-muted-foreground">Hide your identity</p>
               </div>
             </div>
-            <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+            <Switch checked={isAnonymous} onCheckedChange={handleAnonymousToggle} />
           </div>
 
           {/* Notifications */}
