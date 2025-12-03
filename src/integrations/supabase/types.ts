@@ -103,6 +103,7 @@ export type Database = {
           avatar_url: string | null
           completed_challenges: string[] | null
           created_at: string
+          discreet_mode: boolean
           display_name: string | null
           id: string
           is_anonymous: boolean
@@ -114,6 +115,7 @@ export type Database = {
           avatar_url?: string | null
           completed_challenges?: string[] | null
           created_at?: string
+          discreet_mode?: boolean
           display_name?: string | null
           id?: string
           is_anonymous?: boolean
@@ -125,6 +127,7 @@ export type Database = {
           avatar_url?: string | null
           completed_challenges?: string[] | null
           created_at?: string
+          discreet_mode?: boolean
           display_name?: string | null
           id?: string
           is_anonymous?: boolean
