@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, UserPlus, Users, MessageCircle } from "lucide-react";
+import { Loader2, UserPlus, Users, MessageCircle, X, Check } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
 
 interface ProfileRow {
@@ -499,7 +499,7 @@ const Friends = () => {
                   {friendRequests.map((request) => (
                     <li
                       key={request.friendshipId}
-                      className="flex flex-col gap-3 rounded-xl bg-muted/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3"
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
@@ -520,26 +520,26 @@ const Friends = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
+                      <div className="flex gap-2">
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="outline"
-                          className="w-full sm:w-auto"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "decline")
                           }
                         >
-                          Decline
+                          <X className="h-4 w-4" />
                         </Button>
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="calm"
-                          className="w-full sm:w-auto"
+                          className="h-8 w-8"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "accept")
                           }
                         >
-                          Accept
+                          <Check className="h-4 w-4" />
                         </Button>
                       </div>
                     </li>
