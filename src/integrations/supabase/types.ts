@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      community_posts: {
+        Row: {
+          author_name: string | null
+          content: string
+          created_at: string
+          id: string
+          is_anonymous: boolean
+          likes: number
+          tags: string[] | null
+          user_id: string
+        }
+        Insert: {
+          author_name?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          is_anonymous?: boolean
+          likes?: number
+          tags?: string[] | null
+          user_id: string
+        }
+        Update: {
+          author_name?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_anonymous?: boolean
+          likes?: number
+          tags?: string[] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       friendships: {
         Row: {
           accepted_at: string | null
