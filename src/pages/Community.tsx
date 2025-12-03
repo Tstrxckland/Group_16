@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Users, 
   MessageCircle, 
@@ -11,9 +14,10 @@ import {
   Send,
   EyeOff,
   Shield,
-  ChevronRight,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 interface Post {
   id: string;
@@ -26,49 +30,6 @@ interface Post {
   tags: string[];
 }
 
-const samplePosts: Post[] = [
-  {
-    id: "1",
-    author: "Anonymous",
-    isAnonymous: true,
-    content: "Had my first successful phone call with a stranger today! It was just to order food but I've been avoiding phone calls for months. Baby steps! 🎉",
-    likes: 24,
-    comments: 8,
-    timeAgo: "2h ago",
-    tags: ["win", "phone-anxiety"],
-  },
-  {
-    id: "2",
-    author: "Maya",
-    isAnonymous: false,
-    content: "Does anyone else rehearse conversations in their head before they happen? I spent 20 minutes preparing to ask my professor a question today 😅",
-    likes: 47,
-    comments: 15,
-    timeAgo: "4h ago",
-    tags: ["relatable", "college"],
-  },
-  {
-    id: "3",
-    author: "Anonymous",
-    isAnonymous: true,
-    content: "Reminder to everyone here: It's okay to leave a party early. It's okay to not go at all. Your mental health matters more than others' expectations. 💚",
-    likes: 89,
-    comments: 12,
-    timeAgo: "6h ago",
-    tags: ["support", "reminder"],
-  },
-  {
-    id: "4",
-    author: "Jordan",
-    isAnonymous: false,
-    content: "The breathing exercises on this app actually helped me today before a big meeting. I still felt nervous but I didn't spiral. Progress!",
-    likes: 31,
-    comments: 6,
-    timeAgo: "1d ago",
-    tags: ["win", "work"],
-  },
-];
-
 const topics = [
   { name: "All", count: 156 },
   { name: "Wins", count: 43 },
@@ -78,14 +39,57 @@ const topics = [
 ];
 
 const Community = () => {
-  const [posts, setPosts] = useState<Post[]>(samplePosts);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState("All");
   const [isPosting, setIsPosting] = useState(false);
   const [newPost, setNewPost] = useState("");
   const [postAnonymously, setPostAnonymously] = useState(true);
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
-  const toggleLike = (postId: string) => {
+  // Fetch posts from database
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedPosts: Post[] = (data || []).map(post => ({
+        id: post.id,
+        author: post.is_anonymous ? "Anonymous" : (post.author_name || "User"),
+        isAnonymous: post.is_anonymous,
+        content: post.content,
+        likes: post.likes,
+        comments: 0,
+        timeAgo: formatDistanceToNow(new Date(post.created_at), { addSuffix: true }),
+        tags: post.tags || [],
+      }));
+
+      setPosts(formattedPosts);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load posts",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleLike = async (postId: string) => {
+    // Optimistic update
     if (likedPosts.includes(postId)) {
       setLikedPosts(likedPosts.filter(id => id !== postId));
       setPosts(posts.map(p => p.id === postId ? { ...p, likes: p.likes - 1 } : p));
@@ -93,25 +97,77 @@ const Community = () => {
       setLikedPosts([...likedPosts, postId]);
       setPosts(posts.map(p => p.id === postId ? { ...p, likes: p.likes + 1 } : p));
     }
+
+    // Update in database
+    const post = posts.find(p => p.id === postId);
+    if (post) {
+      const newLikes = likedPosts.includes(postId) ? post.likes - 1 : post.likes + 1;
+      await supabase
+        .from('community_posts')
+        .update({ likes: newLikes })
+        .eq('id', postId);
+    }
   };
 
-  const submitPost = () => {
-    if (!newPost.trim()) return;
+  const submitPost = async () => {
+    if (!newPost.trim() || !user) return;
 
-    const post: Post = {
-      id: Date.now().toString(),
-      author: postAnonymously ? "Anonymous" : "You",
-      isAnonymous: postAnonymously,
-      content: newPost,
-      likes: 0,
-      comments: 0,
-      timeAgo: "Just now",
-      tags: [],
-    };
+    setSubmitting(true);
+    try {
+      // Get user's display name if not posting anonymously
+      let authorName = null;
+      if (!postAnonymously) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
+        authorName = profile?.display_name || user.user_metadata?.display_name || "User";
+      }
 
-    setPosts([post, ...posts]);
-    setNewPost("");
-    setIsPosting(false);
+      const { data, error } = await supabase
+        .from('community_posts')
+        .insert({
+          user_id: user.id,
+          author_name: authorName,
+          is_anonymous: postAnonymously,
+          content: newPost,
+          tags: [],
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newPostData: Post = {
+        id: data.id,
+        author: postAnonymously ? "Anonymous" : (authorName || "User"),
+        isAnonymous: postAnonymously,
+        content: data.content,
+        likes: 0,
+        comments: 0,
+        timeAgo: "Just now",
+        tags: [],
+      };
+
+      setPosts([newPostData, ...posts]);
+      setNewPost("");
+      setIsPosting(false);
+      
+      toast({
+        title: "Posted!",
+        description: "Your post has been shared with the community.",
+      });
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create post. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -181,63 +237,75 @@ const Community = () => {
 
       {/* Posts */}
       <div className="space-y-4 animate-fade-up animation-delay-300">
-        {posts.map((post) => (
-          <Card key={post.id}>
-            <CardContent className="p-4">
-              {/* Author */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                  post.isAnonymous ? "bg-muted" : "bg-primary/20"
-                }`}>
-                  {post.isAnonymous ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <span className="text-sm font-medium text-primary">
-                      {post.author[0]}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{post.author}</p>
-                  <p className="text-xs text-muted-foreground">{post.timeAgo}</p>
-                </div>
-              </div>
-
-              {/* Content */}
-              <p className="text-foreground mb-3">{post.content}</p>
-
-              {/* Tags */}
-              {post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {post.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => toggleLike(post.id)}
-                  className={`flex items-center gap-1 text-sm transition-colors ${
-                    likedPosts.includes(post.id)
-                      ? "text-terracotta-400"
-                      : "text-muted-foreground hover:text-terracotta-400"
-                  }`}
-                >
-                  <Heart className={`h-4 w-4 ${likedPosts.includes(post.id) ? "fill-current" : ""}`} />
-                  {post.likes}
-                </button>
-                <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary">
-                  <MessageCircle className="h-4 w-4" />
-                  {post.comments}
-                </button>
-              </div>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : posts.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-muted-foreground">No posts yet. Be the first to share!</p>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          posts.map((post) => (
+            <Card key={post.id}>
+              <CardContent className="p-4">
+                {/* Author */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                    post.isAnonymous ? "bg-muted" : "bg-primary/20"
+                  }`}>
+                    {post.isAnonymous ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <span className="text-sm font-medium text-primary">
+                        {post.author[0]}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{post.author}</p>
+                    <p className="text-xs text-muted-foreground">{post.timeAgo}</p>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <p className="text-foreground mb-3">{post.content}</p>
+
+                {/* Tags */}
+                {post.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {post.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        #{tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleLike(post.id)}
+                    className={`flex items-center gap-1 text-sm transition-colors ${
+                      likedPosts.includes(post.id)
+                        ? "text-terracotta-400"
+                        : "text-muted-foreground hover:text-terracotta-400"
+                    }`}
+                  >
+                    <Heart className={`h-4 w-4 ${likedPosts.includes(post.id) ? "fill-current" : ""}`} />
+                    {post.likes}
+                  </button>
+                  <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary">
+                    <MessageCircle className="h-4 w-4" />
+                    {post.comments}
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* New Post Modal */}
@@ -280,6 +348,7 @@ const Community = () => {
                   variant="outline"
                   className="flex-1"
                   onClick={() => setIsPosting(false)}
+                  disabled={submitting}
                 >
                   Cancel
                 </Button>
@@ -287,10 +356,16 @@ const Community = () => {
                   variant="calm"
                   className="flex-1"
                   onClick={submitPost}
-                  disabled={!newPost.trim()}
+                  disabled={!newPost.trim() || submitting}
                 >
-                  Post
-                  <Send className="h-4 w-4" />
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      Post
+                      <Send className="h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
