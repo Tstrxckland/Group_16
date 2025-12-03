@@ -202,7 +202,7 @@ const Profile = () => {
               tabIndex={0}
               onClick={() => {
                 if (resource.name === "Crisis Support Lines") {
-                  window.location.href = "https://findahelpline.com";
+                  window.open("https://findahelpline.com", "_blank", "noopener,noreferrer");
                 }
               }}
               onKeyDown={(e) => {
@@ -211,7 +211,7 @@ const Profile = () => {
                   resource.name === "Crisis Support Lines"
                 ) {
                   e.preventDefault();
-                  window.location.href = "https://findahelpline.com";
+                  window.open("https://findahelpline.com", "_blank", "noopener,noreferrer");
                 }
               }}
             >
