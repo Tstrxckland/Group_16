@@ -499,7 +499,7 @@ const Friends = () => {
                   {friendRequests.map((request) => (
                     <li
                       key={request.friendshipId}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3"
+                      className="flex flex-col gap-3 rounded-xl bg-muted/60 p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
@@ -520,10 +520,11 @@ const Friends = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
                         <Button
                           size="sm"
                           variant="outline"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "decline")
                           }
@@ -533,6 +534,7 @@ const Friends = () => {
                         <Button
                           size="sm"
                           variant="calm"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "accept")
                           }
