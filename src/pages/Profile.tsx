@@ -108,6 +108,11 @@ const Profile = () => {
     }
   };
 
+  const confidenceScore = Math.min(
+    completedChallenges * 5 + journalEntries * 2 + journalStreak * 3,
+    100
+  );
+
   const stats = [
     { label: "Day Streak", value: journalStreak, icon: Flame, color: "text-terracotta-400" },
     { label: "Challenges", value: completedChallenges, icon: Target, color: "text-primary" },
@@ -169,11 +174,13 @@ const Profile = () => {
           <div className="rounded-xl bg-muted/50 p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="font-medium">Confidence Score</span>
-              <span className="font-bold text-primary">72%</span>
+              <span className="font-bold text-primary">{confidenceScore}%</span>
             </div>
-            <Progress value={72} className="h-2" />
+            <Progress value={confidenceScore} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
-              +5% from last week! Keep going 🌟
+              {confidenceScore === 0
+                ? "As you complete challenges and journal, your confidence score will grow."
+                : "Keep going—your actions are steadily building confidence."}
             </p>
           </div>
         </CardContent>
