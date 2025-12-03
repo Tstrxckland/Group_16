@@ -19,6 +19,7 @@ import {
   Trash2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
 
 interface Post {
   id: string;
@@ -114,6 +115,16 @@ const Community = () => {
 
   const submitPost = async () => {
     if (!newPost.trim() || !user) return;
+
+    // Check for crisis content and show supportive message
+    const { hasCrisisContent } = detectSensitiveContent(newPost);
+    if (hasCrisisContent) {
+      toast({
+        title: "We care about you",
+        description: "If you're struggling, please reach out to a crisis helpline. Your post will still be shared, but consider talking to someone who can help.",
+        duration: 8000,
+      });
+    }
 
     setSubmitting(true);
     try {
@@ -299,7 +310,7 @@ const Community = () => {
                 </div>
 
                 {/* Content */}
-                <p className="text-foreground mb-3">{post.content}</p>
+                <p className="text-foreground mb-3">{censorContent(post.content)}</p>
 
                 {/* Tags */}
                 {post.tags.length > 0 && (
