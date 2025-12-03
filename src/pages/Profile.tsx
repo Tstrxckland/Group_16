@@ -28,6 +28,7 @@ interface ProfileData {
   id: string;
   display_name: string | null;
   is_anonymous: boolean;
+  created_at: string;
 }
 
 const Profile = () => {
@@ -43,7 +44,7 @@ const Profile = () => {
     if (!user) return;
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, is_anonymous")
+      .select("id, display_name, is_anonymous, created_at")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -53,8 +54,8 @@ const Profile = () => {
     }
 
     if (data) {
-      setProfile(data);
-      setIsAnonymous(data.is_anonymous);
+      setProfile(data as ProfileData);
+      setIsAnonymous((data as ProfileData).is_anonymous);
     }
   }, [user]);
 
@@ -127,9 +128,15 @@ const Profile = () => {
             </div>
             <div>
               <h2 className="text-xl font-semibold">
-                {isAnonymous ? "Anonymous User" : (profile?.display_name || user?.email?.split("@")[0] || "User")}
+                {isAnonymous
+                  ? "Anonymous User"
+                  : (profile?.display_name || user?.email?.split("@")[0] || "User")}
               </h2>
-              <p className="text-muted-foreground">Member since January 2024</p>
+              <p className="text-muted-foreground">
+                {profile?.created_at
+                  ? `Member since ${new Date(profile.created_at).getFullYear()}`
+                  : "Member since"}
+              </p>
             </div>
           </div>
 
