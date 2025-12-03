@@ -130,7 +130,7 @@ const Profile = () => {
   const resources = [
     { name: "Crisis Support Lines", description: "24/7 help when you need it", url: "https://findahelpline.com" },
     { name: "Anxiety Resources", description: "Articles and guides", url: "https://www.cci.health.wa.gov.au/Resources/Looking-after-yourself/anxiety" },
-    { name: "Find a Therapist", description: "Professional support", url: "https://www.psychologytoday.com/us/therapists" },
+    { name: "Find a Therapist", description: "Professional support", url: "https://www.betterhelp.com" },
   ];
 
   return (
