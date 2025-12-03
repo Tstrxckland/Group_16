@@ -15,12 +15,14 @@ import {
   EyeOff,
   Shield,
   Plus,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface Post {
   id: string;
+  userId: string;
   author: string;
   isAnonymous: boolean;
   content: string;
@@ -66,6 +68,7 @@ const Community = () => {
 
       const formattedPosts: Post[] = (data || []).map(post => ({
         id: post.id,
+        userId: post.user_id,
         author: post.is_anonymous ? "Anonymous" : (post.author_name || "User"),
         isAnonymous: post.is_anonymous,
         content: post.content,
@@ -141,6 +144,7 @@ const Community = () => {
 
       const newPostData: Post = {
         id: data.id,
+        userId: user.id,
         author: postAnonymously ? "Anonymous" : (authorName || "User"),
         isAnonymous: postAnonymously,
         content: data.content,
@@ -167,6 +171,30 @@ const Community = () => {
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const deletePost = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('community_posts')
+        .delete()
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      setPosts(posts.filter(p => p.id !== postId));
+      toast({
+        title: "Deleted",
+        description: "Your post has been removed.",
+      });
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete post.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -285,22 +313,32 @@ const Community = () => {
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => toggleLike(post.id)}
-                    className={`flex items-center gap-1 text-sm transition-colors ${
-                      likedPosts.includes(post.id)
-                        ? "text-terracotta-400"
-                        : "text-muted-foreground hover:text-terracotta-400"
-                    }`}
-                  >
-                    <Heart className={`h-4 w-4 ${likedPosts.includes(post.id) ? "fill-current" : ""}`} />
-                    {post.likes}
-                  </button>
-                  <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary">
-                    <MessageCircle className="h-4 w-4" />
-                    {post.comments}
-                  </button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => toggleLike(post.id)}
+                      className={`flex items-center gap-1 text-sm transition-colors ${
+                        likedPosts.includes(post.id)
+                          ? "text-terracotta-400"
+                          : "text-muted-foreground hover:text-terracotta-400"
+                      }`}
+                    >
+                      <Heart className={`h-4 w-4 ${likedPosts.includes(post.id) ? "fill-current" : ""}`} />
+                      {post.likes}
+                    </button>
+                    <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary">
+                      <MessageCircle className="h-4 w-4" />
+                      {post.comments}
+                    </button>
+                  </div>
+                  {user && post.userId === user.id && (
+                    <button
+                      onClick={() => deletePost(post.id)}
+                      className="text-sm text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>
