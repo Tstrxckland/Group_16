@@ -11,12 +11,14 @@ import {
   Sparkles
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useDiscreetMode } from "@/hooks/useDiscreetMode";
 
 const Dashboard = () => {
+  const { discreetMode } = useDiscreetMode();
   const currentStreak = 7;
   const weeklyProgress = 65;
   const todayChallenge = {
-    title: "Say hi to a classmate",
+    title: discreetMode ? "Greet someone you recognize" : "Say hi to a classmate",
     difficulty: "Easy",
     points: 10,
   };
@@ -43,10 +45,12 @@ const Dashboard = () => {
           <span className="text-sm">{getGreeting()}</span>
         </div>
         <h1 className="font-display text-3xl font-bold text-foreground">
-          Welcome back! 🌿
+          {discreetMode ? "Welcome back" : "Welcome back! 🌿"}
         </h1>
         <p className="text-muted-foreground mt-1">
-          You're doing great. Every step counts.
+          {discreetMode
+            ? "Overview of your recent activity."
+            : "You're doing great. Every step counts."}
         </p>
       </div>
 
@@ -61,7 +65,9 @@ const Dashboard = () => {
         <CardContent>
           <Progress value={weeklyProgress} className="h-3 mb-3" />
           <p className="text-sm text-muted-foreground">
-            You've completed 4 of 6 challenges this week. Keep going!
+            {discreetMode
+              ? "4 of 6 challenges completed this week."
+              : "You've completed 4 of 6 challenges this week. Keep going!"}
           </p>
         </CardContent>
       </Card>
@@ -119,9 +125,13 @@ const Dashboard = () => {
                 <Heart className="h-6 w-6 text-terracotta-400 animate-pulse-soft" />
               </div>
               <div>
-                <p className="font-semibold text-foreground">Need a moment?</p>
+                <p className="font-semibold text-foreground">
+                  {discreetMode ? "Calm tools" : "Need a moment?"}
+                </p>
                 <p className="text-sm text-muted-foreground">
-                  Quick calming exercises
+                  {discreetMode
+                    ? "Access quick breathing and relaxation exercises."
+                    : "Quick calming exercises"}
                 </p>
               </div>
             </div>
@@ -137,7 +147,9 @@ const Dashboard = () => {
             <CardContent className="flex flex-col items-center justify-center p-6 text-center">
               <span className="text-3xl mb-2">📝</span>
               <p className="font-semibold">Journal</p>
-              <p className="text-xs text-muted-foreground">Reflect on today</p>
+              <p className="text-xs text-muted-foreground">
+                {discreetMode ? "Write about your day" : "Reflect on today"}
+              </p>
             </CardContent>
           </Card>
         </Link>
@@ -146,7 +158,9 @@ const Dashboard = () => {
             <CardContent className="flex flex-col items-center justify-center p-6 text-center">
               <span className="text-3xl mb-2">💬</span>
               <p className="font-semibold">Community</p>
-              <p className="text-xs text-muted-foreground">Connect with others</p>
+              <p className="text-xs text-muted-foreground">
+                {discreetMode ? "View community posts" : "Connect with others"}
+              </p>
             </CardContent>
           </Card>
         </Link>

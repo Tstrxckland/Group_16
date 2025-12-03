@@ -29,6 +29,7 @@ interface ProfileData {
   display_name: string | null;
   is_anonymous: boolean;
   created_at: string;
+  discreet_mode: boolean;
 }
 
 const Profile = () => {
@@ -44,7 +45,7 @@ const Profile = () => {
     if (!user) return;
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, is_anonymous, created_at")
+      .select("id, display_name, is_anonymous, created_at, discreet_mode")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -54,8 +55,10 @@ const Profile = () => {
     }
 
     if (data) {
-      setProfile(data as ProfileData);
-      setIsAnonymous((data as ProfileData).is_anonymous);
+      const typed = data as ProfileData;
+      setProfile(typed);
+      setIsAnonymous(typed.is_anonymous);
+      setPrivacyMode(typed.discreet_mode);
     }
   }, [user]);
 
@@ -80,6 +83,26 @@ const Profile = () => {
         variant: "destructive",
       });
       setIsAnonymous(!checked); // revert
+    }
+  };
+
+  const handlePrivacyToggle = async (checked: boolean) => {
+    setPrivacyMode(checked);
+    if (!profile) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ discreet_mode: checked })
+      .eq("id", profile.id);
+
+    if (error) {
+      console.error("Error updating discreet mode:", error);
+      toast({
+        title: "Couldn't save preference",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+      setPrivacyMode(!checked); // revert
     }
   };
 
@@ -206,10 +229,10 @@ const Profile = () => {
               <Moon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Discreet Mode</p>
-                <p className="text-sm text-muted-foreground">Neutral language & UI</p>
+                <p className="text-sm text-muted-foreground">Use more neutral language in the app</p>
               </div>
             </div>
-            <Switch checked={privacyMode} onCheckedChange={setPrivacyMode} />
+            <Switch checked={privacyMode} onCheckedChange={handlePrivacyToggle} />
           </div>
         </CardContent>
       </Card>
