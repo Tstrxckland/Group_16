@@ -128,9 +128,9 @@ const Profile = () => {
   ];
 
   const resources = [
-    { name: "Crisis Support Lines", description: "24/7 help when you need it" },
-    { name: "Anxiety Resources", description: "Articles and guides" },
-    { name: "Find a Therapist", description: "Professional support" },
+    { name: "Crisis Support Lines", description: "24/7 help when you need it", url: "https://findahelpline.com" },
+    { name: "Anxiety Resources", description: "Articles and guides", url: "https://www.cci.health.wa.gov.au/Resources/Looking-after-yourself/anxiety" },
+    { name: "Find a Therapist", description: "Professional support", url: "https://www.psychologytoday.com/us/therapists" },
   ];
 
   return (
@@ -293,17 +293,12 @@ const Profile = () => {
               role="button"
               tabIndex={0}
               onClick={() => {
-                if (resource.name === "Crisis Support Lines") {
-                  window.open("https://findahelpline.com", "_blank", "noopener,noreferrer");
-                }
+                window.open(resource.url, "_blank", "noopener,noreferrer");
               }}
               onKeyDown={(e) => {
-                if (
-                  (e.key === "Enter" || e.key === " ") &&
-                  resource.name === "Crisis Support Lines"
-                ) {
+                if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  window.open("https://findahelpline.com", "_blank", "noopener,noreferrer");
+                  window.open(resource.url, "_blank", "noopener,noreferrer");
                 }
               }}
             >
@@ -314,7 +309,6 @@ const Profile = () => {
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
             </div>
           ))}
-
         </CardContent>
       </Card>
 
