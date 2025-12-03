@@ -247,7 +247,7 @@ const Profile = () => {
         variant="outline"
         className="w-full mb-4 text-destructive border-destructive/40 hover:bg-destructive/10"
       >
-        Delete account
+        Delete Account
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
