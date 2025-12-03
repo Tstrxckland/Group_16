@@ -198,6 +198,22 @@ const Profile = () => {
             <div
               key={resource.name}
               className="flex items-center justify-between rounded-xl p-3 hover:bg-muted/50 cursor-pointer transition-colors"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (resource.name === "Crisis Support Lines") {
+                  window.location.href = "https://findahelpline.com";
+                }
+              }}
+              onKeyDown={(e) => {
+                if (
+                  (e.key === "Enter" || e.key === " ") &&
+                  resource.name === "Crisis Support Lines"
+                ) {
+                  e.preventDefault();
+                  window.location.href = "https://findahelpline.com";
+                }
+              }}
             >
               <div>
                 <p className="font-medium">{resource.name}</p>
@@ -206,6 +222,7 @@ const Profile = () => {
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
             </div>
           ))}
+
         </CardContent>
       </Card>
 
