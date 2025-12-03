@@ -229,7 +229,7 @@ const Profile = () => {
       {/* Logout */}
       <Button
         variant="outline"
-        className="w-full mb-4"
+        className="w-full mb-2"
         onClick={async () => {
           await signOut();
           toast({
@@ -241,6 +241,13 @@ const Profile = () => {
       >
         <LogOut className="h-4 w-4" />
         Sign Out
+      </Button>
+
+      <Button
+        variant="outline"
+        className="w-full mb-4 text-destructive border-destructive/40 hover:bg-destructive/10"
+      >
+        Delete account
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
