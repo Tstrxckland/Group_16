@@ -58,6 +58,7 @@ const Friends = () => {
   const [friends, setFriends] = useState<FriendWithFriendshipId[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<{ friendshipId: string; friendName: string } | null>(null);
+  const [removingFriendshipId, setRemovingFriendshipId] = useState<string | null>(null);
 
   const loadProfileAndFriends = useCallback(async () => {
     if (!user) return;
@@ -390,6 +391,39 @@ const Friends = () => {
     }
   };
 
+  const handleRemoveFriend = async (friendshipId: string) => {
+    try {
+      setRemovingFriendshipId(friendshipId);
+
+      const { error } = await supabase
+        .from("friendships")
+        .delete()
+        .eq("id", friendshipId);
+
+      if (error) throw error;
+
+      if (selectedFriend?.friendshipId === friendshipId) {
+        setSelectedFriend(null);
+      }
+
+      toast({
+        title: "Friend removed",
+        description: "You won't see updates from this friend anymore.",
+      });
+
+      loadProfileAndFriends();
+    } catch (error: any) {
+      console.error("Error removing friend:", error);
+      toast({
+        title: "Couldn't remove friend",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingFriendshipId(null);
+    }
+  };
+
   const initialsForProfile = (p: ProfileRow | FriendWithFriendshipId) => {
     const name = p.display_name || p.username || "Friend";
     const parts = name.split(" ");
@@ -585,18 +619,35 @@ const Friends = () => {
                           )}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setSelectedFriend({
-                            friendshipId: friend.friendshipId,
-                            friendName: friend.display_name || friend.username || "Friend"
-                          })
-                        }
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={removingFriendshipId === friend.friendshipId}
+                          onClick={() => handleRemoveFriend(friend.friendshipId)}
+                          aria-label="Remove friend"
+                        >
+                          {removingFriendshipId === friend.friendshipId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <X className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setSelectedFriend({
+                              friendshipId: friend.friendshipId,
+                              friendName: friend.display_name || friend.username || "Friend"
+                            })
+                          }
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>
