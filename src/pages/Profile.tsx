@@ -22,6 +22,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useUserStats } from "@/hooks/useUserStats";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProfileData {
@@ -36,6 +37,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const { completedChallenges, journalEntries, journalStreak } = useUserStats();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [notifications, setNotifications] = useState(true);
@@ -107,17 +109,17 @@ const Profile = () => {
   };
 
   const stats = [
-    { label: "Day Streak", value: 7, icon: Flame, color: "text-terracotta-400" },
-    { label: "Challenges", value: 12, icon: Target, color: "text-primary" },
-    { label: "Journal Entries", value: 23, icon: BookHeart, color: "text-accent" },
+    { label: "Day Streak", value: journalStreak, icon: Flame, color: "text-terracotta-400" },
+    { label: "Challenges", value: completedChallenges, icon: Target, color: "text-primary" },
+    { label: "Journal Entries", value: journalEntries, icon: BookHeart, color: "text-accent" },
   ];
 
   const achievements = [
-    { name: "First Step", description: "Completed your first challenge", earned: true },
-    { name: "Week Warrior", description: "7-day streak", earned: true },
-    { name: "Voice Found", description: "Shared in community", earned: true },
+    { name: "First Step", description: "Completed your first challenge", earned: completedChallenges >= 1 },
+    { name: "Week Warrior", description: "7-day streak", earned: journalStreak >= 7 },
+    { name: "Voice Found", description: "Shared in community", earned: false },
     { name: "Breath Master", description: "Used calm tools 10 times", earned: false },
-    { name: "Month Strong", description: "30-day streak", earned: false },
+    { name: "Month Strong", description: "30-day streak", earned: journalStreak >= 30 },
   ];
 
   const resources = [
