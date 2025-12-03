@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
-import { 
-  User, 
-  Shield, 
-  Bell, 
+import {
+  User,
+  Shield,
+  Bell,
   Eye,
   EyeOff,
   Moon,
@@ -17,11 +17,12 @@ import {
   BookHeart,
   Settings,
   LogOut,
-  ExternalLink
+  ExternalLink,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -246,6 +247,33 @@ const Profile = () => {
       <Button
         variant="outline"
         className="w-full mb-4 text-destructive border-destructive/40 hover:bg-destructive/10"
+        onClick={async () => {
+          const confirmed = window.confirm(
+            "Are you sure you want to permanently delete your account? This cannot be undone.",
+          );
+
+          if (!confirmed) return;
+
+          const { error } = await supabase.functions.invoke("delete-account");
+
+          if (error) {
+            console.error("Error deleting account", error);
+            toast({
+              title: "Error deleting account",
+              description:
+                "Something went wrong while deleting your account. Please try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          toast({
+            title: "Account deleted",
+            description: "Your account and data have been deleted.",
+          });
+
+          navigate("/");
+        }}
       >
         Delete Account
       </Button>
