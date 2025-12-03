@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,17 +9,22 @@ import {
   Smile,
   Meh,
   Frown,
-  ChevronRight,
   Check,
-  Sparkles
+  Sparkles,
+  Loader2
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+type Mood = "good" | "okay" | "tough";
 
 interface JournalEntry {
   id: string;
-  date: string;
-  mood: "good" | "okay" | "tough";
+  mood: Mood;
   content: string;
-  reflection?: string;
+  reflection: string | null;
+  created_at: string;
 }
 
 const moodOptions = [
@@ -36,49 +41,114 @@ const reflectionPrompts = [
   "How are you feeling right now, in this moment?",
 ];
 
-const sampleEntries: JournalEntry[] = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    mood: "good",
-    content: "Had a really good day! Said hi to someone new in class and they smiled back. Small win but it felt huge.",
-    reflection: "I'm grateful for my friend Sarah who always makes me feel comfortable.",
-  },
-  {
-    id: "2",
-    date: "2024-01-14",
-    mood: "okay",
-    content: "Today was okay. Felt nervous before the meeting but used the breathing exercise and it helped. Didn't speak up but I stayed through the whole thing.",
-  },
-  {
-    id: "3",
-    date: "2024-01-13",
-    mood: "tough",
-    content: "Tough day. Avoided going to lunch with coworkers. Feeling frustrated with myself but trying to remember it's okay to have hard days.",
-    reflection: "Tomorrow is a new day. I can try again.",
-  },
-];
-
 const Journal = () => {
-  const [entries, setEntries] = useState<JournalEntry[]>(sampleEntries);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
-  const [newEntry, setNewEntry] = useState({ mood: "" as JournalEntry["mood"] | "", content: "", reflection: "" });
+  const [newEntry, setNewEntry] = useState({ mood: "" as Mood | "", content: "", reflection: "" });
   const [currentPrompt] = useState(reflectionPrompts[Math.floor(Math.random() * reflectionPrompts.length)]);
+  const [streak, setStreak] = useState(0);
 
-  const saveEntry = () => {
-    if (!newEntry.mood || !newEntry.content) return;
+  const loadEntries = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
 
-    const entry: JournalEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString().split("T")[0],
-      mood: newEntry.mood as JournalEntry["mood"],
-      content: newEntry.content,
-      reflection: newEntry.reflection || undefined,
-    };
+    const { data, error } = await supabase
+      .from("journal_entries")
+      .select("id, mood, content, reflection, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
-    setEntries([entry, ...entries]);
-    setNewEntry({ mood: "", content: "", reflection: "" });
-    setIsWriting(false);
+    if (error) {
+      console.error("Error loading journal entries:", error);
+      toast({
+        title: "Couldn't load entries",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } else if (data) {
+      setEntries(data as JournalEntry[]);
+      calculateStreak(data as JournalEntry[]);
+    }
+
+    setLoading(false);
+  }, [user, toast]);
+
+  useEffect(() => {
+    loadEntries();
+  }, [loadEntries]);
+
+  const calculateStreak = (entries: JournalEntry[]) => {
+    if (entries.length === 0) {
+      setStreak(0);
+      return;
+    }
+
+    // Get unique dates (in local timezone)
+    const dates = entries.map((e) => new Date(e.created_at).toDateString());
+    const uniqueDates = [...new Set(dates)].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+
+    // Check if streak is active (today or yesterday has an entry)
+    if (uniqueDates[0] !== today && uniqueDates[0] !== yesterday) {
+      setStreak(0);
+      return;
+    }
+
+    let currentStreak = 1;
+    for (let i = 1; i < uniqueDates.length; i++) {
+      const current = new Date(uniqueDates[i - 1]);
+      const prev = new Date(uniqueDates[i]);
+      const diffDays = Math.round((current.getTime() - prev.getTime()) / 86400000);
+
+      if (diffDays === 1) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    setStreak(currentStreak);
+  };
+
+  const saveEntry = async () => {
+    if (!newEntry.mood || !newEntry.content || !user) return;
+
+    setSaving(true);
+
+    const { data, error } = await supabase
+      .from("journal_entries")
+      .insert({
+        user_id: user.id,
+        mood: newEntry.mood,
+        content: newEntry.content,
+        reflection: newEntry.reflection || null,
+      })
+      .select("id, mood, content, reflection, created_at")
+      .single();
+
+    if (error) {
+      console.error("Error saving journal entry:", error);
+      toast({
+        title: "Couldn't save entry",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } else if (data) {
+      const newEntries = [data as JournalEntry, ...entries];
+      setEntries(newEntries);
+      calculateStreak(newEntries);
+      setNewEntry({ mood: "", content: "", reflection: "" });
+      setIsWriting(false);
+      toast({ title: "Entry saved" });
+    }
+
+    setSaving(false);
   };
 
   const formatDate = (dateStr: string) => {
@@ -87,8 +157,8 @@ const Journal = () => {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (dateStr === today.toISOString().split("T")[0]) return "Today";
-    if (dateStr === yesterday.toISOString().split("T")[0]) return "Yesterday";
+    if (date.toDateString() === today.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
     
     return date.toLocaleDateString("en-US", { 
       weekday: "short", 
@@ -97,15 +167,17 @@ const Journal = () => {
     });
   };
 
-  const getMoodIcon = (mood: JournalEntry["mood"]) => {
+  const getMoodIcon = (mood: Mood) => {
     const option = moodOptions.find(o => o.value === mood);
     return option ? <option.icon className="h-5 w-5" /> : null;
   };
 
-  const getMoodColor = (mood: JournalEntry["mood"]) => {
+  const getMoodColor = (mood: Mood) => {
     const option = moodOptions.find(o => o.value === mood);
     return option?.color || "";
   };
+
+  if (!user) return null;
 
   return (
     <div className="gradient-hero min-h-screen px-6 py-8">
@@ -133,44 +205,61 @@ const Journal = () => {
           </div>
 
           {/* Streak Card */}
-          <Card className="mb-6 bg-primary/5 border-primary/20 animate-fade-up animation-delay-100">
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
-                <Sparkles className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold">7 day streak! 🔥</p>
-                <p className="text-sm text-muted-foreground">
-                  You've been journaling consistently
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {streak > 0 && (
+            <Card className="mb-6 bg-primary/5 border-primary/20 animate-fade-up animation-delay-100">
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">{streak} day streak!</p>
+                  <p className="text-sm text-muted-foreground">
+                    You've been journaling consistently
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Entries */}
           <div className="space-y-4 animate-fade-up animation-delay-200">
-            {entries.map((entry) => (
-              <Card key={entry.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {formatDate(entry.date)}
-                    </div>
-                    <div className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs ${getMoodColor(entry.mood)}`}>
-                      {getMoodIcon(entry.mood)}
-                      <span className="capitalize">{entry.mood}</span>
-                    </div>
-                  </div>
-                  <p className="text-foreground mb-2">{entry.content}</p>
-                  {entry.reflection && (
-                    <p className="text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3">
-                      {entry.reflection}
-                    </p>
-                  )}
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : entries.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <BookHeart className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    No journal entries yet. Start writing to track your journey.
+                  </p>
                 </CardContent>
               </Card>
-            ))}
+            ) : (
+              entries.map((entry) => (
+                <Card key={entry.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {formatDate(entry.created_at)}
+                      </div>
+                      <div className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs ${getMoodColor(entry.mood)}`}>
+                        {getMoodIcon(entry.mood)}
+                        <span className="capitalize">{entry.mood}</span>
+                      </div>
+                    </div>
+                    <p className="text-foreground mb-2">{entry.content}</p>
+                    {entry.reflection && (
+                      <p className="text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3">
+                        {entry.reflection}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </>
       ) : (
@@ -251,10 +340,11 @@ const Journal = () => {
             variant="calm"
             className="w-full"
             onClick={saveEntry}
-            disabled={!newEntry.mood || !newEntry.content}
+            disabled={!newEntry.mood || !newEntry.content || saving}
           >
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Entry
-            <Check className="h-4 w-4" />
+            {!saving && <Check className="h-4 w-4" />}
           </Button>
         </div>
       )}

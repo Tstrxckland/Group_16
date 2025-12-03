@@ -12,11 +12,12 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDiscreetMode } from "@/hooks/useDiscreetMode";
+import { useUserStats } from "@/hooks/useUserStats";
 
 const Dashboard = () => {
   const { discreetMode } = useDiscreetMode();
-  const currentStreak = 7;
-  const weeklyProgress = 65;
+  const { completedChallenges, journalStreak } = useUserStats();
+  const weeklyProgress = completedChallenges > 0 ? Math.min(Math.round((completedChallenges / 6) * 100), 100) : 0;
   const todayChallenge = {
     title: discreetMode ? "Greet someone you recognize" : "Say hi to a classmate",
     difficulty: "Easy",
@@ -24,9 +25,9 @@ const Dashboard = () => {
   };
 
   const quickStats = [
-    { label: "Current Streak", value: `${currentStreak} days`, icon: Flame, color: "text-terracotta-400" },
-    { label: "Challenges Done", value: "12", icon: Target, color: "text-primary" },
-    { label: "Confidence Score", value: "72%", icon: TrendingUp, color: "text-accent" },
+    { label: "Current Streak", value: `${journalStreak} days`, icon: Flame, color: "text-terracotta-400" },
+    { label: "Challenges Done", value: String(completedChallenges), icon: Target, color: "text-primary" },
+    { label: "Weekly Progress", value: `${weeklyProgress}%`, icon: TrendingUp, color: "text-accent" },
   ];
 
   const getGreeting = () => {
@@ -66,8 +67,8 @@ const Dashboard = () => {
           <Progress value={weeklyProgress} className="h-3 mb-3" />
           <p className="text-sm text-muted-foreground">
             {discreetMode
-              ? "4 of 6 challenges completed this week."
-              : "You've completed 4 of 6 challenges this week. Keep going!"}
+              ? `${completedChallenges} of 6 challenges completed this week.`
+              : `You've completed ${completedChallenges} of 6 challenges this week. Keep going!`}
           </p>
         </CardContent>
       </Card>
