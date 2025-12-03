@@ -39,7 +39,7 @@ const Profile = () => {
   const { toast } = useToast();
   const { completedChallenges, journalEntries, journalStreak } = useUserStats();
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
 
