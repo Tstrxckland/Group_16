@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useDiscreetMode } from "@/hooks/useDiscreetMode";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Users, 
@@ -44,6 +45,7 @@ const topics = [
 const Community = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { discreetMode } = useDiscreetMode();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState("All");
@@ -310,7 +312,7 @@ const Community = () => {
                 </div>
 
                 {/* Content */}
-                <p className="text-foreground mb-3">{censorContent(post.content)}</p>
+                <p className="text-foreground mb-3">{discreetMode ? censorContent(post.content) : post.content}</p>
 
                 {/* Tags */}
                 {post.tags.length > 0 && (
