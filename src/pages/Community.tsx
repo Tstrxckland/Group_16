@@ -17,7 +17,8 @@ import {
   Shield,
   Plus,
   Loader2,
-  Trash2
+  Trash2,
+  Pencil
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
@@ -54,6 +55,8 @@ const Community = () => {
   const [postAnonymously, setPostAnonymously] = useState(true);
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   // Fetch posts from database
   useEffect(() => {
@@ -211,6 +214,50 @@ const Community = () => {
     }
   };
 
+  const startEditing = (post: Post) => {
+    setEditingPost(post);
+    setEditContent(post.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingPost(null);
+    setEditContent("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingPost || !editContent.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('community_posts')
+        .update({ content: editContent })
+        .eq('id', editingPost.id);
+
+      if (error) throw error;
+
+      setPosts(posts.map(p => 
+        p.id === editingPost.id ? { ...p, content: editContent } : p
+      ));
+      
+      toast({
+        title: "Updated",
+        description: "Your post has been edited.",
+      });
+      
+      cancelEditing();
+    } catch (error) {
+      console.error('Error updating post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update post.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="gradient-hero min-h-screen px-6 py-8">
       {/* Header */}
@@ -345,12 +392,20 @@ const Community = () => {
                     </button>
                   </div>
                   {user && post.userId === user.id && (
-                    <button
-                      onClick={() => deletePost(post.id)}
-                      className="text-sm text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => startEditing(post)}
+                        className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => deletePost(post.id)}
+                        className="text-sm text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -414,6 +469,54 @@ const Community = () => {
                   ) : (
                     <>
                       Post
+                      <Send className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 backdrop-blur-sm animate-fade-in">
+          <Card className="w-full max-w-lg rounded-b-none animate-slide-in-right pb-20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-primary" />
+                Edit your post
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                placeholder="Edit your post..."
+                className="min-h-[120px]"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+              />
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={cancelEditing}
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="calm"
+                  className="flex-1"
+                  onClick={saveEdit}
+                  disabled={!editContent.trim() || submitting}
+                >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      Save
                       <Send className="h-4 w-4" />
                     </>
                   )}
