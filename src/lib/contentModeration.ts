@@ -1,74 +1,90 @@
-// List of sensitive/trigger words to censor
-const sensitiveWords = [
-  // Profanity
-  'fuck', 'fucking', 'fucked', 'fucks',
-  'shit', 'shits', 'shitting',
-  'damn', 'damned', 'damnit',
-  'ass', 'asshole', 'asses',
-  'bitch', 'bitches',
-  'bastard', 'bastards',
-  'crap', 'crappy',
-  'hell',
-  'piss', 'pissed',
-  
-  // Crisis/trigger words - handle with care
-  'kill myself', 'kill me', 'end my life', 'end it all',
-  'want to die', 'wanna die', 'suicide', 'suicidal',
-  'self harm', 'self-harm', 'cut myself', 'hurt myself',
-  
-  // Slurs and hate speech (abbreviated list)
-  'retard', 'retarded',
-  'faggot', 'fag',
-  'nigger', 'nigga',
-];
+type ContentCategory = 'profanity' | 'crisis' | 'slurs';
 
-// Create regex patterns for each word (case-insensitive, whole word matching where appropriate)
-const createPattern = (word: string): RegExp => {
-  // For phrases, match them directly
-  if (word.includes(' ') || word.includes('-')) {
-    return new RegExp(word.replace(/[-]/g, '[-\\s]?'), 'gi');
-  }
-  // For single words, match whole words only
-  return new RegExp(`\\b${word}\\b`, 'gi');
-};
+interface SensitiveContentResult {
+  hasSensitive: boolean;
+  hasCrisisContent: boolean;
+}
 
-/**
- * Censors sensitive words in text by replacing them with asterisks
- */
-export const censorContent = (text: string): string => {
-  let censored = text;
-  
-  for (const word of sensitiveWords) {
-    const pattern = createPattern(word);
-    censored = censored.replace(pattern, (match) => {
-      // Keep first letter, replace rest with asterisks
-      if (match.length <= 2) return '*'.repeat(match.length);
-      return match[0] + '*'.repeat(match.length - 1);
-    });
-  }
-  
-  return censored;
-};
-
-/**
- * Checks if content contains sensitive words
- * Returns array of detected categories
- */
-export const detectSensitiveContent = (text: string): { hasSensitive: boolean; hasCrisisContent: boolean } => {
-  const lowerText = text.toLowerCase();
-  
-  const crisisPatterns = [
+const SENSITIVE_WORDS: Readonly<Record<ContentCategory, readonly string[]>> = {
+  profanity: [
+    'fuck', 'fucking', 'fucked', 'fucks',
+    'shit', 'shits', 'shitting',
+    'damn', 'damned', 'damnit',
+    'ass', 'asshole', 'asses',
+    'bitch', 'bitches',
+    'bastard', 'bastards',
+    'crap', 'crappy',
+    'hell',
+    'piss', 'pissed',
+  ],
+  crisis: [
     'kill myself', 'kill me', 'end my life', 'end it all',
     'want to die', 'wanna die', 'suicide', 'suicidal',
-    'self harm', 'self-harm', 'cut myself', 'hurt myself'
-  ];
-  
-  const hasCrisisContent = crisisPatterns.some(pattern => lowerText.includes(pattern));
-  
-  const hasSensitive = sensitiveWords.some(word => {
-    const pattern = createPattern(word);
-    return pattern.test(text);
-  });
-  
+    'self harm', 'self-harm', 'cut myself', 'hurt myself',
+  ],
+  slurs: [
+    'retard', 'retarded',
+    'faggot', 'fag',
+    'nigger', 'nigga',
+  ],
+} as const;
+
+const getAllSensitiveWords = (): string[] =>
+  Object.values(SENSITIVE_WORDS).flat();
+
+const escapeRegExp = (str: string): string =>
+  str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const createPattern = (word: string): RegExp => {
+  const escaped = escapeRegExp(word);
+  const pattern = word.includes(' ') || word.includes('-')
+    ? escaped.replace(/-/g, '[-\\s]?')
+    : `\\b${escaped}\\b`;
+
+  return new RegExp(pattern, 'gi');
+};
+
+const censorMatch = (match: string): string => {
+  if (match.length <= 2) {
+    return '*'.repeat(match.length);
+  }
+  return match[0] + '*'.repeat(match.length - 1);
+};
+
+export const censorContent = (text: unknown): string => {
+  if (typeof text !== 'string') {
+    return '';
+  }
+
+  if (text.trim() === '') {
+    return text;
+  }
+
+  return getAllSensitiveWords().reduce(
+    (result, word) => result.replace(createPattern(word), censorMatch),
+    text
+  );
+};
+
+export const detectSensitiveContent = (text: unknown): SensitiveContentResult => {
+  const defaultResult: SensitiveContentResult = {
+    hasSensitive: false,
+    hasCrisisContent: false,
+  };
+
+  if (typeof text !== 'string' || text.trim() === '') {
+    return defaultResult;
+  }
+
+  const lowerText = text.toLowerCase();
+
+  const hasCrisisContent = SENSITIVE_WORDS.crisis.some((phrase) =>
+    lowerText.includes(phrase.toLowerCase())
+  );
+
+  const hasSensitive = getAllSensitiveWords().some((word) =>
+    createPattern(word).test(text)
+  );
+
   return { hasSensitive, hasCrisisContent };
 };
