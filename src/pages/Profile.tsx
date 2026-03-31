@@ -40,6 +40,7 @@ const Profile = () => {
   const { completedChallenges, journalEntries, journalStreak } = useUserStats();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [savingAnonymous, setSavingAnonymous] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
 
@@ -69,8 +70,18 @@ const Profile = () => {
   }, [loadProfile]);
 
   const handleAnonymousToggle = async (checked: boolean) => {
+    if (!profile) {
+      toast({
+        title: "Profile not loaded",
+        description: "Please wait a moment and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const previousValue = isAnonymous;
     setIsAnonymous(checked);
-    if (!profile) return;
+    setSavingAnonymous(true);
 
     const { error } = await supabase
       .from("profiles")
@@ -84,8 +95,10 @@ const Profile = () => {
         description: "Please try again.",
         variant: "destructive",
       });
-      setIsAnonymous(!checked); // revert
+      setIsAnonymous(previousValue);
     }
+
+    setSavingAnonymous(false);
   };
 
   const handlePrivacyToggle = async (checked: boolean) => {
@@ -211,13 +224,28 @@ const Profile = () => {
           {/* Anonymous Mode */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <EyeOff className="h-5 w-5 text-muted-foreground" />
+              {isAnonymous ? (
+                <EyeOff className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <Eye className="h-5 w-5 text-muted-foreground" />
+              )}
               <div>
-                <p className="font-medium">Anonymous Mode</p>
-                <p className="text-sm text-muted-foreground">Hide your identity</p>
+                <p className="font-medium">Profile Anonymity</p>
+                <p className="text-sm text-muted-foreground">
+                  {isAnonymous ? "You appear as Anonymous User." : "Your display name is visible."}
+                </p>
               </div>
             </div>
-            <Switch checked={isAnonymous} onCheckedChange={handleAnonymousToggle} />
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-muted-foreground min-w-[70px] text-right">
+                {savingAnonymous ? "Saving..." : isAnonymous ? "Anonymous" : "Public"}
+              </span>
+              <Switch
+                checked={isAnonymous}
+                onCheckedChange={handleAnonymousToggle}
+                disabled={savingAnonymous || !profile}
+              />
+            </div>
           </div>
 
           {/* Notifications */}
