@@ -54,6 +54,17 @@ For each anonymous message/post in a public feed:
 - Backend should avoid returning unnecessary identifying fields for anonymous records in public endpoints.
 - Internal moderation tooling can retain `user_id` mapping server-side, but that mapping is never shown to regular users.
 
+## Backend Identity Masking (F3.5)
+
+- New Supabase backend view: `public.peer_discovery_profiles`
+- Source migration:
+  - `supabase/migrations/20260203235900_f35_identity_masking_peer_discovery.sql`
+- This view masks identifying profile fields when `is_anonymous = true`:
+  - `public_display_name` => `Anonymous User`
+  - `public_avatar_url` => `NULL`
+  - `public_raw_display_name` => `NULL`
+- Peer matching/filtering queries should use this view rather than querying `public.profiles` directly.
+
 ## Current Implementation Notes
 
 - Shared helper added: `src/lib/anonymity.ts`
