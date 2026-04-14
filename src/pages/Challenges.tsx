@@ -12,7 +12,7 @@ import {
   Award
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { getCompletedChallengeIds, saveCompletedChallengeIds } from "@/services/challengesService";
 
 interface Challenge {
   id: string;
@@ -109,15 +109,12 @@ const Challenges = () => {
   useEffect(() => {
     const loadCompletedChallenges = async () => {
       if (!user) return;
-      
-      const { data } = await supabase
-        .from('profiles')
-        .select('completed_challenges')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (data?.completed_challenges) {
-        setCompletedIds(data.completed_challenges);
+
+      try {
+        const ids = await getCompletedChallengeIds(user.id);
+        setCompletedIds(ids);
+      } catch (error) {
+        console.error("Error loading completed challenges:", error);
       }
     };
 
@@ -127,11 +124,12 @@ const Challenges = () => {
   // Save completed challenges to database
   const saveCompletedChallenges = async (newCompletedIds: string[]) => {
     if (!user) return;
-    
-    await supabase
-      .from('profiles')
-      .update({ completed_challenges: newCompletedIds })
-      .eq('user_id', user.id);
+
+    try {
+      await saveCompletedChallengeIds(user.id, newCompletedIds);
+    } catch (error) {
+      console.error("Error saving completed challenges:", error);
+    }
   };
 
   const filteredChallenges = challenges.filter(c => {

@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createCommunityPost,
+  deleteCommunityPost,
+  getCommunityPostById,
+  getDisplayNameForUser,
+  listCommunityPosts,
+  updateCommunityPostContent,
+  updatePostLikes,
+} from "@/services/communityPostsService";
 import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
 
 export interface ForumPost {
@@ -91,13 +99,8 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
   const fetchPosts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("community_posts")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setPosts((data || []).map(formatPostRow));
+      const data = await listCommunityPosts();
+      setPosts(data.map(formatPostRow));
     } catch (error) {
       console.error("Error fetching posts:", error);
       toast({
@@ -116,13 +119,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
   const fetchPostById = async (postId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("community_posts")
-        .select("*")
-        .eq("id", postId)
-        .single();
-
-      if (error) throw error;
+      const data = await getCommunityPostById(postId);
       return data ? formatPostRow(data) : null;
     } catch (error) {
       console.error("Error fetching post:", error);
@@ -137,6 +134,8 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
   const toggleLike = async (postId: string) => {
     const isLiked = likedPosts.includes(postId);
+    const previousLikedPosts = likedPosts;
+    let previousLikes: number | null = null;
     setLikedPosts((prev) =>
       isLiked ? prev.filter((id) => id !== postId) : [...prev, postId],
     );
@@ -145,14 +144,33 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     setPosts((prev) =>
       prev.map((post) => {
         if (post.id !== postId) return post;
+        previousLikes = post.likes;
         const nextLikes = isLiked ? Math.max(0, post.likes - 1) : post.likes + 1;
         newLikes = nextLikes;
         return { ...post, likes: nextLikes };
       }),
     );
 
-    if (newLikes !== null) {
-      await supabase.from("community_posts").update({ likes: newLikes }).eq("id", postId);
+    try {
+      if (newLikes !== null) {
+        await updatePostLikes(postId, newLikes);
+      }
+    } catch (error) {
+      // Roll back optimistic updates when persistence fails.
+      setLikedPosts(previousLikedPosts);
+      if (previousLikes !== null) {
+        setPosts((prev) =>
+          prev.map((post) =>
+            post.id === postId ? { ...post, likes: previousLikes as number } : post,
+          ),
+        );
+      }
+      console.error("Error updating like:", error);
+      toast({
+        title: "Couldn't update like",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -173,33 +191,21 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     try {
       let authorName = null;
       if (!postAnonymously) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("user_id", user.id)
-          .single();
-
-        authorName =
-          profile?.display_name || user.user_metadata?.display_name || "User";
+        const profileDisplayName = await getDisplayNameForUser(user.id);
+        authorName = profileDisplayName || user.user_metadata?.display_name || "User";
       }
 
       const censoredContent = censorContent(newPost);
       const tagsForPost =
         newPostTopicId === "all" ? [] : [newPostTopicId];
 
-      const { data, error } = await supabase
-        .from("community_posts")
-        .insert({
-          user_id: user.id,
-          author_name: authorName,
-          is_anonymous: postAnonymously,
-          content: censoredContent,
-          tags: tagsForPost,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await createCommunityPost({
+        userId: user.id,
+        authorName,
+        isAnonymous: postAnonymously,
+        content: censoredContent,
+        tags: tagsForPost,
+      });
 
       const newPostData: ForumPost = {
         id: data.id,
@@ -237,8 +243,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
   const deletePost = async (postId: string) => {
     try {
-      const { error } = await supabase.from("community_posts").delete().eq("id", postId);
-      if (error) throw error;
+      await deleteCommunityPost(postId);
 
       setPosts((prev) => prev.filter((post) => post.id !== postId));
       toast({
@@ -270,12 +275,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("community_posts")
-        .update({ content: editContent })
-        .eq("id", editingPost.id);
-
-      if (error) throw error;
+      await updateCommunityPostContent(editingPost.id, editContent);
 
       setPosts((prev) =>
         prev.map((post) =>

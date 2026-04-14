@@ -29,7 +29,7 @@ const BottomNav = () => {
                 discreetMode ? "gap-0" : "gap-1",
                 isActive
                   ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )
             }
           >

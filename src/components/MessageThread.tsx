@@ -1,18 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-
-interface Message {
-  id: string;
-  content: string;
-  sender_profile_id: string;
-  created_at: string;
-}
+import { listMessages, Message, sendMessage, subscribeToMessages } from "@/services/messagesService";
 
 interface MessageThreadProps {
   friendshipId: string;
@@ -27,30 +19,34 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const loadMessages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listMessages(friendshipId);
+      setMessages(data);
+    } catch (error) {
+      console.error("Error loading messages:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load messages",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [friendshipId]);
+
   useEffect(() => {
     loadMessages();
-    
-    // Set up realtime subscription
-    const channel = supabase
-      .channel(`messages:${friendshipId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `friendship_id=eq.${friendshipId}`
-        },
-        (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
-        }
-      )
-      .subscribe();
+
+    const unsubscribe = subscribeToMessages(friendshipId, (message) => {
+      setMessages((prev) => [...prev, message]);
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [friendshipId]);
+  }, [friendshipId, loadMessages]);
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
@@ -59,48 +55,20 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
     }
   }, [messages]);
 
-  const loadMessages = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("friendship_id", friendshipId)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Error loading messages:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load messages",
-        variant: "destructive"
-      });
-    } else {
-      setMessages(data || []);
-    }
-    setLoading(false);
-  };
-
   const handleSendMessage = async () => {
     const trimmed = newMessage.trim();
     if (!trimmed) return;
 
-    const { error } = await supabase
-      .from("messages")
-      .insert({
-        friendship_id: friendshipId,
-        sender_profile_id: myProfileId,
-        content: trimmed
-      });
-
-    if (error) {
+    try {
+      await sendMessage(friendshipId, myProfileId, trimmed);
+      setNewMessage("");
+    } catch (error) {
       console.error("Error sending message:", error);
       toast({
         title: "Error",
         description: "Failed to send message",
-        variant: "destructive"
+        variant: "destructive",
       });
-    } else {
-      setNewMessage("");
     }
   };
 

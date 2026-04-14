@@ -14,18 +14,8 @@ import {
   Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
-type Mood = "good" | "okay" | "tough";
-
-interface JournalEntry {
-  id: string;
-  mood: Mood;
-  content: string;
-  reflection: string | null;
-  created_at: string;
-}
+import { createJournalEntry, JournalEntry, listJournalEntries, Mood } from "@/services/journalService";
 
 const moodOptions = [
   { value: "good" as const, label: "Good day", icon: Smile, color: "bg-sage-100 text-sage-600" },
@@ -56,25 +46,20 @@ const Journal = () => {
     if (!user) return;
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("journal_entries")
-      .select("id, mood, content, reflection, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await listJournalEntries(user.id);
+      setEntries(data);
+      calculateStreak(data);
+    } catch (error) {
       console.error("Error loading journal entries:", error);
       toast({
         title: "Couldn't load entries",
         description: "Please try again.",
         variant: "destructive",
       });
-    } else if (data) {
-      setEntries(data as JournalEntry[]);
-      calculateStreak(data as JournalEntry[]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, [user, toast]);
 
   useEffect(() => {
@@ -121,34 +106,29 @@ const Journal = () => {
 
     setSaving(true);
 
-    const { data, error } = await supabase
-      .from("journal_entries")
-      .insert({
-        user_id: user.id,
+    try {
+      const data = await createJournalEntry({
+        userId: user.id,
         mood: newEntry.mood,
         content: newEntry.content,
-        reflection: newEntry.reflection || null,
-      })
-      .select("id, mood, content, reflection, created_at")
-      .single();
-
-    if (error) {
+        reflection: newEntry.reflection,
+      });
+      const newEntries = [data, ...entries];
+      setEntries(newEntries);
+      calculateStreak(newEntries);
+      setNewEntry({ mood: "", content: "", reflection: "" });
+      setIsWriting(false);
+      toast({ title: "Entry saved" });
+    } catch (error) {
       console.error("Error saving journal entry:", error);
       toast({
         title: "Couldn't save entry",
         description: "Please try again.",
         variant: "destructive",
       });
-    } else if (data) {
-      const newEntries = [data as JournalEntry, ...entries];
-      setEntries(newEntries);
-      calculateStreak(newEntries);
-      setNewEntry({ mood: "", content: "", reflection: "" });
-      setIsWriting(false);
-      toast({ title: "Entry saved" });
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   };
 
   const formatDate = (dateStr: string) => {
