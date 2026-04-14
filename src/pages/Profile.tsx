@@ -24,6 +24,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useUserStats } from "@/hooks/useUserStats";
+import { useAnonymityMode } from "@/hooks/useAnonymityMode";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProfileData {
@@ -55,8 +56,12 @@ const Profile = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   const { completedChallenges, journalEntries, journalStreak } = useUserStats();
+  const {
+    anonymityEnabled,
+    loading: anonymityLoading,
+    setAnonymityEnabled,
+  } = useAnonymityMode();
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [isAnonymous, setIsAnonymous] = useState(false);
   const [savingAnonymous, setSavingAnonymous] = useState(false);
   const [savingIdentitySafeMode, setSavingIdentitySafeMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -81,7 +86,6 @@ const Profile = () => {
     if (data) {
       const typed = data as ProfileData;
       setProfile(typed);
-      setIsAnonymous(typed.is_anonymous);
       setPrivacyMode(typed.discreet_mode);
     }
   }, [user]);
@@ -129,14 +133,9 @@ const Profile = () => {
       return;
     }
 
-    const previousValue = isAnonymous;
-    setIsAnonymous(checked);
     setSavingAnonymous(true);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_anonymous: checked })
-      .eq("id", profile.id);
+    const { error } = await setAnonymityEnabled(checked);
 
     if (error) {
       console.error("Error updating anonymous mode:", error);
@@ -145,7 +144,6 @@ const Profile = () => {
         description: "Please try again.",
         variant: "destructive",
       });
-      setIsAnonymous(previousValue);
     }
 
     setSavingAnonymous(false);
@@ -181,32 +179,35 @@ const Profile = () => {
       return;
     }
 
-    const prevAnonymous = isAnonymous;
+    const prevAnonymous = anonymityEnabled;
     const prevDiscreet = privacyMode;
 
-    setIsAnonymous(true);
-    setPrivacyMode(true);
     setSavingIdentitySafeMode(true);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_anonymous: true, discreet_mode: true })
-      .eq("id", profile.id);
+    try {
+      const { error: anonymityError } = await setAnonymityEnabled(true);
+      if (anonymityError) throw anonymityError;
 
-    if (error) {
+      setPrivacyMode(true);
+      const { error: discreetError } = await supabase
+        .from("profiles")
+        .update({ discreet_mode: true })
+        .eq("id", profile.id);
+      if (discreetError) throw discreetError;
+
+      toast({
+        title: "Identity-safe mode enabled",
+        description: "Your profile is now anonymous and discreet mode is on.",
+      });
+    } catch (error) {
       console.error("Error enabling identity-safe mode:", error);
       toast({
         title: "Couldn't enable identity-safe mode",
         description: "Please try again.",
         variant: "destructive",
       });
-      setIsAnonymous(prevAnonymous);
       setPrivacyMode(prevDiscreet);
-    } else {
-      toast({
-        title: "Identity-safe mode enabled",
-        description: "Your profile is now anonymous and discreet mode is on.",
-      });
+      await setAnonymityEnabled(prevAnonymous);
     }
 
     setSavingIdentitySafeMode(false);
@@ -252,7 +253,7 @@ const Profile = () => {
         <CardContent className="p-6">
           <div className="flex items-center gap-4 mb-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20">
-              {isAnonymous ? (
+              {anonymityEnabled ? (
                 <EyeOff className="h-8 w-8 text-primary" />
               ) : (
                 <span className="text-2xl font-bold text-primary">
@@ -262,7 +263,7 @@ const Profile = () => {
             </div>
             <div>
               <h2 className="text-xl font-semibold">
-                {isAnonymous
+                {anonymityEnabled
                   ? "Anonymous User"
                   : (profile?.display_name || user?.email?.split("@")[0] || "User")}
               </h2>
@@ -315,7 +316,7 @@ const Profile = () => {
           {/* Anonymous Mode */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {isAnonymous ? (
+              {anonymityEnabled ? (
                 <EyeOff className="h-5 w-5 text-muted-foreground" />
               ) : (
                 <Eye className="h-5 w-5 text-muted-foreground" />
@@ -323,18 +324,18 @@ const Profile = () => {
               <div>
                 <p className="font-medium">Profile Anonymity</p>
                 <p className="text-sm text-muted-foreground">
-                  {isAnonymous ? "You appear as Anonymous User." : "Your display name is visible."}
+                  {anonymityEnabled ? "You appear as Anonymous User." : "Your display name is visible."}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-muted-foreground min-w-[70px] text-right">
-                {savingAnonymous ? "Saving..." : isAnonymous ? "Anonymous" : "Public"}
+                {savingAnonymous ? "Saving..." : anonymityEnabled ? "Anonymous" : "Public"}
               </span>
               <Switch
-                checked={isAnonymous}
+                checked={anonymityEnabled}
                 onCheckedChange={handleAnonymousToggle}
-                disabled={savingAnonymous || !profile}
+                disabled={savingAnonymous || anonymityLoading || !profile}
               />
             </div>
           </div>
@@ -386,11 +387,11 @@ const Profile = () => {
             variant="outline"
             className="w-full"
             onClick={handleIdentitySafePreset}
-            disabled={savingIdentitySafeMode || (isAnonymous && privacyMode)}
+            disabled={savingIdentitySafeMode || (anonymityEnabled && privacyMode)}
           >
             {savingIdentitySafeMode
               ? "Enabling..."
-              : isAnonymous && privacyMode
+              : anonymityEnabled && privacyMode
                 ? "Identity-Safe Mode Active"
                 : "Enable Identity-Safe Mode"}
           </Button>
@@ -448,7 +449,7 @@ const Profile = () => {
                 onCheckedChange={(checked) =>
                   updatePeerDiscoveryPrivacy("showDisplayNameInDiscovery", checked)
                 }
-                disabled={isAnonymous}
+                disabled={anonymityEnabled}
               />
             </div>
 

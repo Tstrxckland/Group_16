@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useDiscreetMode } from "@/hooks/useDiscreetMode";
+import { useAnonymityMode } from "@/hooks/useAnonymityMode";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Users, 
@@ -48,6 +49,7 @@ const Community = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { discreetMode } = useDiscreetMode();
+  const { anonymityEnabled } = useAnonymityMode();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState("All");
@@ -65,22 +67,8 @@ const Community = () => {
   }, []);
 
   useEffect(() => {
-    const loadIdentitySafetyPreference = async () => {
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("profiles")
-        .select("is_anonymous")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (data && typeof data.is_anonymous === "boolean") {
-        setPostAnonymously(data.is_anonymous);
-      }
-    };
-
-    loadIdentitySafetyPreference();
-  }, [user]);
+    setPostAnonymously(anonymityEnabled);
+  }, [anonymityEnabled]);
 
   const fetchPosts = async () => {
     try {
