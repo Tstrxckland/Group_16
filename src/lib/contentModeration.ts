@@ -1,4 +1,4 @@
-type ContentCategory = 'profanity' | 'crisis' | 'slurs';
+type ContentCategory = "profanity" | "crisis" | "sensitive";
 
 interface SensitiveContentResult {
   hasSensitive: boolean;
@@ -22,10 +22,10 @@ const SENSITIVE_WORDS: Readonly<Record<ContentCategory, readonly string[]>> = {
     'want to die', 'wanna die', 'suicide', 'suicidal',
     'self harm', 'self-harm', 'cut myself', 'hurt myself',
   ],
-  slurs: [
-    'retard', 'retarded',
-    'faggot', 'fag',
-    'nigger', 'nigga',
+  sensitive: [
+    "retard", "retarded",
+    "faggot", "fag",
+    "nigger", "nigga",
   ],
 } as const;
 
