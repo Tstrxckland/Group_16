@@ -41,6 +41,7 @@ const Profile = () => {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [savingAnonymous, setSavingAnonymous] = useState(false);
+  const [savingIdentitySafeMode, setSavingIdentitySafeMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
 
@@ -119,6 +120,47 @@ const Profile = () => {
       });
       setPrivacyMode(!checked); // revert
     }
+  };
+
+  const handleIdentitySafePreset = async () => {
+    if (!profile) {
+      toast({
+        title: "Profile not loaded",
+        description: "Please wait a moment and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const prevAnonymous = isAnonymous;
+    const prevDiscreet = privacyMode;
+
+    setIsAnonymous(true);
+    setPrivacyMode(true);
+    setSavingIdentitySafeMode(true);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_anonymous: true, discreet_mode: true })
+      .eq("id", profile.id);
+
+    if (error) {
+      console.error("Error enabling identity-safe mode:", error);
+      toast({
+        title: "Couldn't enable identity-safe mode",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+      setIsAnonymous(prevAnonymous);
+      setPrivacyMode(prevDiscreet);
+    } else {
+      toast({
+        title: "Identity-safe mode enabled",
+        description: "Your profile is now anonymous and discreet mode is on.",
+      });
+    }
+
+    setSavingIdentitySafeMode(false);
   };
 
   const confidenceScore = Math.min(
@@ -271,6 +313,38 @@ const Profile = () => {
             </div>
             <Switch checked={privacyMode} onCheckedChange={handlePrivacyToggle} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Identity-Safe Preset */}
+      <Card className="mb-6 animate-fade-up animation-delay-350 border-primary/30">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            Identity-Safe Mode
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Designed for people who want extra protection from harassment or being misgendered in public spaces.
+          </p>
+          <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
+            <p>- Hides your public identity (anonymous profile display)</p>
+            <p>- Enables discreet mode for neutral language in the app</p>
+            <p>- Community posts default to anonymous</p>
+          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleIdentitySafePreset}
+            disabled={savingIdentitySafeMode || (isAnonymous && privacyMode)}
+          >
+            {savingIdentitySafeMode
+              ? "Enabling..."
+              : isAnonymous && privacyMode
+                ? "Identity-Safe Mode Active"
+                : "Enable Identity-Safe Mode"}
+          </Button>
         </CardContent>
       </Card>
 

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
+import { getPublicIdentity } from "@/lib/anonymity";
 
 interface Post {
   id: string;
@@ -63,6 +64,24 @@ const Community = () => {
     fetchPosts();
   }, []);
 
+  useEffect(() => {
+    const loadIdentitySafetyPreference = async () => {
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("is_anonymous")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (data && typeof data.is_anonymous === "boolean") {
+        setPostAnonymously(data.is_anonymous);
+      }
+    };
+
+    loadIdentitySafetyPreference();
+  }, [user]);
+
   const fetchPosts = async () => {
     try {
       const { data, error } = await supabase
@@ -72,17 +91,24 @@ const Community = () => {
 
       if (error) throw error;
 
-      const formattedPosts: Post[] = (data || []).map(post => ({
-        id: post.id,
-        userId: post.user_id,
-        author: post.is_anonymous ? "Anonymous" : (post.author_name || "User"),
-        isAnonymous: post.is_anonymous,
-        content: post.content,
-        likes: post.likes,
-        comments: 0,
-        timeAgo: formatDistanceToNow(new Date(post.created_at), { addSuffix: true }),
-        tags: post.tags || [],
-      }));
+      const formattedPosts: Post[] = (data || []).map((post) => {
+        const identity = getPublicIdentity({
+          isAnonymous: post.is_anonymous,
+          authorName: post.author_name,
+        });
+
+        return {
+          id: post.id,
+          userId: post.user_id,
+          author: identity.displayName,
+          isAnonymous: post.is_anonymous,
+          content: post.content,
+          likes: post.likes,
+          comments: 0,
+          timeAgo: formatDistanceToNow(new Date(post.created_at), { addSuffix: true }),
+          tags: post.tags || [],
+        };
+      });
 
       setPosts(formattedPosts);
     } catch (error) {
@@ -158,10 +184,15 @@ const Community = () => {
 
       if (error) throw error;
 
+      const identity = getPublicIdentity({
+        isAnonymous: postAnonymously,
+        authorName,
+      });
+
       const newPostData: Post = {
         id: data.id,
         userId: user.id,
-        author: postAnonymously ? "Anonymous" : (authorName || "User"),
+        author: identity.displayName,
         isAnonymous: postAnonymously,
         content: data.content,
         likes: 0,
@@ -348,7 +379,7 @@ const Community = () => {
                       <EyeOff className="h-4 w-4 text-muted-foreground" />
                     ) : (
                       <span className="text-sm font-medium text-primary">
-                        {post.author[0]}
+                        {post.author[0]?.toUpperCase() ?? "U"}
                       </span>
                     )}
                   </div>
@@ -439,7 +470,7 @@ const Community = () => {
                   <div>
                     <p className="font-medium">Post anonymously</p>
                     <p className="text-sm text-muted-foreground">
-                      Your identity will be hidden
+                      Recommended for identity-safe posting to avoid harassment/misgendering.
                     </p>
                   </div>
                 </div>
