@@ -202,8 +202,10 @@ const Profile = () => {
             <div className="flex items-center gap-3">
               <EyeOff className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Anonymous Mode</p>
-                <p className="text-sm text-muted-foreground">Hide your identity</p>
+                <p className="font-medium">Anonymous Mode (profile visibility)</p>
+                <p className="text-sm text-muted-foreground">
+                  Hides your identity on profile surfaces. Community post anonymity is set per post.
+                </p>
               </div>
             </div>
             <Switch checked={isAnonymous} onCheckedChange={handleAnonymousToggle} />
@@ -227,7 +229,9 @@ const Profile = () => {
               <Moon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">Discreet Mode</p>
-                <p className="text-sm text-muted-foreground">Use more neutral language in the app</p>
+                <p className="text-sm text-muted-foreground">
+                  Uses more neutral language in the app. It does not change your post anonymity.
+                </p>
               </div>
             </div>
             <Switch checked={privacyMode} onCheckedChange={handlePrivacyToggle} />

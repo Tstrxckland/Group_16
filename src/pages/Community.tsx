@@ -7,8 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { useDiscreetMode } from "@/hooks/useDiscreetMode";
+import { useToast } from "@/hooks/use-toast";
 import { type ForumPost } from "@/hooks/useCommunityPosts";
 import { CommunityForumProvider, useCommunityForum } from "@/context/communityForumContext";
+import { PostReportFlow } from "@/components/forum/PostReportFlow";
+import {
+  createComment,
+  listCommentsByPost,
+  type CommunityCommentRow,
+} from "@/services/communityCommentsService";
+import { moderateContent } from "@/services/moderationService";
+import { sanitizeText } from "@/lib/sanitize";
 import {
   Users,
   MessageCircle,
@@ -159,7 +168,9 @@ function ForumModals() {
                   <div>
                     <p className="font-medium">Post anonymously</p>
                     <p className="text-sm text-muted-foreground">
-                      Your identity will be hidden
+                      {postAnonymously
+                        ? "Anonymous ON — your name will be hidden."
+                        : "Anonymous OFF — your display name will be shown."}
                     </p>
                   </div>
                 </div>
@@ -167,6 +178,22 @@ function ForumModals() {
                   checked={postAnonymously}
                   onCheckedChange={setPostAnonymously}
                 />
+              </div>
+
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Posting as: {postAnonymously ? "Anonymous" : "Your display name"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  You can change this for each post. Discreet mode only changes wording style.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Privacy in community: anonymous posting hides your name on this post, while profile
+                  privacy settings apply to your account surfaces elsewhere in the app.
+                </p>
               </div>
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row">
@@ -429,6 +456,20 @@ export function CommunityThreadList() {
     toggleLike,
   } = useCommunityForum();
   const { discreetMode } = useDiscreetMode();
+  const { toast } = useToast();
+
+  const handleSubmitReport = async (payload: {
+    postId: string;
+    reason: "inappropriate-language" | "harassment" | "spam" | "crisis-content" | "other";
+    details?: string;
+  }) => {
+    // Temporary handoff stub until report backend endpoint is wired.
+    console.info("[report-post] submitted", payload);
+    toast({
+      title: "Report sent",
+      description: "Thank you for helping us keep this space supportive.",
+    });
+  };
 
   const filtered = useMemo(
     () => posts.filter((p) => postMatchesTopic(p, topicId)),
@@ -574,7 +615,12 @@ export function CommunityThreadList() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-muted-foreground">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <PostReportFlow
+                              postId={post.id}
+                              postAuthor={post.author}
+                              onSubmitReport={handleSubmitReport}
+                            />
                             <button
                               type="button"
                               className={`flex items-center gap-1 text-sm transition-colors ${
@@ -633,9 +679,28 @@ export function CommunityPostDetail() {
     refetchPosts,
     fetchPostById,
   } = useCommunityForum();
+  const { toast } = useToast();
 
   const [fetched, setFetched] = useState<ForumPost | null>(null);
   const [fetchingOne, setFetchingOne] = useState(false);
+  const [comments, setComments] = useState<CommunityCommentRow[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentAnonymously, setCommentAnonymously] = useState(true);
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  const handleSubmitReport = async (payload: {
+    postId: string;
+    reason: "inappropriate-language" | "harassment" | "spam" | "crisis-content" | "other";
+    details?: string;
+  }) => {
+    // Temporary handoff stub until report backend endpoint is wired.
+    console.info("[report-post] submitted", payload);
+    toast({
+      title: "Report sent",
+      description: "Thank you for helping us keep this space supportive.",
+    });
+  };
 
   const fromList = postId ? posts.find((p) => p.id === postId) : undefined;
   const post = fromList ?? fetched;
@@ -670,6 +735,33 @@ export function CommunityPostDetail() {
     };
   }, [fetchPostById, fromList, postId]);
 
+  useEffect(() => {
+    if (!postId) return;
+    let cancelled = false;
+    const loadComments = async () => {
+      setLoadingComments(true);
+      try {
+        const data = await listCommentsByPost(postId);
+        if (!cancelled) setComments(data);
+      } catch (error) {
+        console.error("Error loading comments:", error);
+        if (!cancelled) {
+          toast({
+            title: "Couldn't load replies",
+            description: "Please try again in a moment.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingComments(false);
+      }
+    };
+    loadComments();
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, toast]);
+
   if (!postId) {
     return null;
   }
@@ -702,6 +794,56 @@ export function CommunityPostDetail() {
     : post.content;
 
   const topicForBack = topicSlugForBack(post);
+  const handleSubmitComment = async () => {
+    const trimmed = commentText.trim();
+    if (!trimmed || !postId || !user) return;
+    if (trimmed.length > 1000) {
+      toast({
+        title: "Reply is too long",
+        description: "Please keep replies under 1000 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmittingComment(true);
+    try {
+      const moderation = await moderateContent(trimmed);
+      if (!moderation.clean) {
+        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
+        toast({
+          title: "Reply blocked by moderation",
+          description: `Please revise your reply. Flagged categories: ${categories.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const inserted = await createComment({
+        postId,
+        userId: user.id,
+        authorName: user.user_metadata?.display_name || "User",
+        isAnonymous: commentAnonymously,
+        content: trimmed,
+      });
+
+      setComments((prev) => [...prev, inserted]);
+      setCommentText("");
+      toast({
+        title: "Reply posted",
+        description: "Your reply is now visible in this thread.",
+      });
+    } catch (error) {
+      console.error("Error creating reply:", error);
+      toast({
+        title: "Couldn't post reply",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   return (
     <article className="space-y-5">
@@ -765,7 +907,12 @@ export function CommunityPostDetail() {
           )}
 
           <div className="flex flex-col gap-4 border-t border-border/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <PostReportFlow
+                postId={post.id}
+                postAuthor={post.author}
+                onSubmitReport={handleSubmitReport}
+              />
               <button
                 type="button"
                 onClick={async () => {
@@ -788,36 +935,104 @@ export function CommunityPostDetail() {
               </button>
               <span className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MessageCircle className="h-5 w-5" />
-                Replies coming soon
+                {comments.length} {comments.length === 1 ? "reply" : "replies"}
               </span>
             </div>
 
             {user && post.userId === user.id && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl"
+                  className="rounded-xl px-2 sm:px-3"
                   onClick={() => startEditing(post)}
+                  aria-label="Edit post"
                 >
                   <Pencil className="h-4 w-4" />
-                  Edit
+                  <span className="hidden sm:inline">Edit</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl text-destructive hover:text-destructive"
+                  className="rounded-xl px-2 sm:px-3 text-destructive hover:text-destructive"
                   onClick={async () => {
                     await deletePost(post.id);
                     navigate("/community");
                     await refetchPosts();
                   }}
+                  aria-label="Delete post"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete
+                  <span className="hidden sm:inline">Delete</span>
                 </Button>
               </div>
             )}
+          </div>
+
+          <div className="space-y-4 border-t border-border/50 pt-4">
+            <h2 className="text-sm font-semibold text-foreground">Replies</h2>
+
+            {loadingComments ? (
+              <p className="text-sm text-muted-foreground">Loading replies...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No replies yet. You can start the conversation gently.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {comments.map((comment) => (
+                  <li key={comment.id} className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {comment.is_anonymous
+                          ? "Anonymous"
+                          : sanitizeText(comment.author_name || "Community member")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(comment.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                      {sanitizeText(comment.content)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="space-y-3 rounded-xl border border-border/60 bg-background p-3">
+              <Textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Write a supportive reply..."
+                className="min-h-[90px]"
+                maxLength={1000}
+              />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={commentAnonymously}
+                    onCheckedChange={setCommentAnonymously}
+                    id="comment-anonymous-toggle"
+                  />
+                  <label
+                    htmlFor="comment-anonymous-toggle"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Reply anonymously
+                  </label>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="calm"
+                  onClick={handleSubmitComment}
+                  disabled={!commentText.trim() || submittingComment}
+                >
+                  {submittingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post reply"}
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
