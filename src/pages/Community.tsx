@@ -582,10 +582,10 @@ export function CommunityThreadList() {
                                   ? "text-terracotta-400"
                                   : "hover:text-terracotta-400"
                               }`}
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                toggleLike(post.id);
+                                await toggleLike(post.id);
                               }}
                               aria-label={`Like, ${post.likes} likes`}
                             >
@@ -768,7 +768,9 @@ export function CommunityPostDetail() {
             <div className="flex items-center gap-6">
               <button
                 type="button"
-                onClick={() => toggleLike(post.id)}
+                onClick={async () => {
+                  await toggleLike(post.id);
+                }}
                 className={`flex items-center gap-2 text-sm font-medium transition-colors ${
                   likedPosts.includes(post.id)
                     ? "text-terracotta-400"

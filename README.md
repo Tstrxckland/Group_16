@@ -1,73 +1,114 @@
-# Welcome to your Lovable project
+# SafeSpace - Bridging the Social Gap
 
-## Project info
+A supportive web application designed for individuals with social anxiety. SafeSpace helps users track their mental wellness journey, practice mindfulness, journal their thoughts, complete social challenges, and connect with a supportive community.
 
-**URL**: https://lovable.dev/projects/e9c695af-8942-466d-bda2-3ee03bb8d90b
+## Features
 
-## How can I edit this code?
+- **Personal Dashboard** - Track your growth and wellness journey
+- **Journal** - Record thoughts and moods with reflective journaling
+- **Quick Calm Tools** - Breathing exercises and meditation techniques
+- **Social Challenges** - Build confidence with progressive challenges
+- **Community** - Anonymous support community posts
+- **Friends** - Connect and message with other users
+- **Discreet Mode** - Privacy-focused features
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Auth, Edge Functions)
+- **State Management**: TanStack React Query
+- **Routing**: React Router v6
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/e9c695af-8942-466d-bda2-3ee03bb8d90b) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ (recommended: use [nvm](https://github.com/nvm-sh/nvm))
+- npm or bun
+- A Supabase account (for backend services)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone the repository
 git clone <YOUR_GIT_URL>
+cd Group_16
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Copy environment example and configure
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Environment Variables
 
-**Use GitHub Codespaces**
+Create a `.env` file based on `.env.example`:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```env
+VITE_SUPABASE_URL="https://your-project.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY="your-anon-key"
+VITE_SUPABASE_PROJECT_ID="your-project-id"
+```
 
-## What technologies are used for this project?
+Get these values from your [Supabase Dashboard](https://supabase.com/dashboard) under Settings > API.
 
-This project is built with:
+## Available Scripts
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Create production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | Run ESLint |
 
-## How can I deploy this project?
+## Project Structure
 
-Simply open [Lovable](https://lovable.dev/projects/e9c695af-8942-466d-bda2-3ee03bb8d90b) and click on Share -> Publish.
+```
+src/
+├── components/     # React components
+│   ├── layout/     # Layout components
+│   └── ui/         # shadcn/ui components
+├── hooks/          # Custom React hooks
+├── integrations/   # External service integrations
+├── lib/            # Utility functions
+└── pages/          # Page components
+```
 
-## Can I connect a custom domain to my Lovable project?
+## Database Setup
 
-Yes, you can!
+The `supabase/migrations/` folder contains all database migrations. To set up a new Supabase project:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```bash
+# Install Supabase CLI
+npm install -g supabase
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+# Push migrations to your project
+supabase db push
+```
+
+## Documentation
+
+- See `cursor_migration.md` for detailed migration and setup instructions
+- See `docs/architecture.md` for system architecture overview
+
+## Deployment
+
+Build the production version:
+
+```bash
+npm run build
+```
+
+The `dist/` folder can be deployed to any static hosting service (Vercel, Netlify, Cloudflare Pages, etc.)
+
+## License
+
+This project is private.

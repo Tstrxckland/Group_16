@@ -23,15 +23,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useUserStats } from "@/hooks/useUserStats";
-import { supabase } from "@/integrations/supabase/client";
-
-interface ProfileData {
-  id: string;
-  display_name: string | null;
-  is_anonymous: boolean;
-  created_at: string;
-  discreet_mode: boolean;
-}
+import {
+  deleteAccount,
+  getProfileByUserId,
+  ProfileData,
+  updateAnonymousMode,
+  updateDiscreetMode,
+} from "@/services/profileService";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -45,22 +43,15 @@ const Profile = () => {
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name, is_anonymous, created_at, discreet_mode")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) {
+    try {
+      const data = await getProfileByUserId(user.id);
+      if (data) {
+        setProfile(data);
+        setIsAnonymous(data.is_anonymous);
+        setPrivacyMode(data.discreet_mode);
+      }
+    } catch (error) {
       console.error("Error loading profile:", error);
-      return;
-    }
-
-    if (data) {
-      const typed = data as ProfileData;
-      setProfile(typed);
-      setIsAnonymous(typed.is_anonymous);
-      setPrivacyMode(typed.discreet_mode);
     }
   }, [user]);
 
@@ -72,12 +63,9 @@ const Profile = () => {
     setIsAnonymous(checked);
     if (!profile) return;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_anonymous: checked })
-      .eq("id", profile.id);
-
-    if (error) {
+    try {
+      await updateAnonymousMode(profile.id, checked);
+    } catch (error) {
       console.error("Error updating anonymous mode:", error);
       toast({
         title: "Couldn't save preference",
@@ -92,12 +80,9 @@ const Profile = () => {
     setPrivacyMode(checked);
     if (!profile) return;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ discreet_mode: checked })
-      .eq("id", profile.id);
-
-    if (error) {
+    try {
+      await updateDiscreetMode(profile.id, checked);
+    } catch (error) {
       console.error("Error updating discreet mode:", error);
       toast({
         title: "Couldn't save preference",
@@ -339,9 +324,9 @@ const Profile = () => {
 
           if (!confirmed) return;
 
-          const { error } = await supabase.functions.invoke("delete-account");
-
-          if (error) {
+          try {
+            await deleteAccount();
+          } catch (error) {
             console.error("Error deleting account", error);
             toast({
               title: "Error deleting account",
