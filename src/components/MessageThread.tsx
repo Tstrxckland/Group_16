@@ -5,6 +5,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { listMessages, Message, sendMessage, subscribeToMessages } from "@/services/messagesService";
+import { moderateContent } from "@/services/moderationService";
+import { sanitizeText } from "@/lib/sanitize";
 
 interface MessageThreadProps {
   friendshipId: string;
@@ -60,6 +62,17 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
     if (!trimmed) return;
 
     try {
+      const moderation = await moderateContent(trimmed);
+      if (!moderation.clean) {
+        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
+        toast({
+          title: "Message blocked by moderation",
+          description: `Please revise your message. Flagged categories: ${categories.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       await sendMessage(friendshipId, myProfileId, trimmed);
       setNewMessage("");
     } catch (error) {
@@ -82,7 +95,7 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
   return (
     <div className="flex flex-col h-full border border-border rounded-lg bg-card">
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="font-semibold text-lg">{friendName}</h3>
+        <h3 className="font-semibold text-lg">{sanitizeText(friendName)}</h3>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
@@ -107,7 +120,7 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
                       : "bg-muted"
                   }`}
                 >
-                  <p className="text-sm break-words">{msg.content}</p>
+                  <p className="text-sm break-words">{sanitizeText(msg.content)}</p>
                   <p className="text-xs opacity-70 mt-1">
                     {new Date(msg.created_at).toLocaleTimeString([], {
                       hour: "2-digit",

@@ -11,7 +11,9 @@ import {
   updateCommunityPostContent,
   updatePostLikes,
 } from "@/services/communityPostsService";
+import { moderateContent } from "@/services/moderationService";
 import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
+import { sanitizeText } from "@/lib/sanitize";
 
 export interface ForumPost {
   id: string;
@@ -36,18 +38,20 @@ export function formatPostRow(row: {
   tags: string[] | null;
   created_at: string;
 }): ForumPost {
+  const sanitizedAuthor = sanitizeText(row.author_name);
+  const sanitizedContent = sanitizeText(row.content);
   return {
     id: row.id,
     userId: row.user_id,
     author: row.is_anonymous
       ? "Anonymous"
-      : row.author_name || "Community member",
+      : sanitizedAuthor || "Community member",
     isAnonymous: row.is_anonymous,
-    content: row.content,
+    content: sanitizedContent,
     likes: row.likes,
     comments: 0,
     timeAgo: formatDistanceToNow(new Date(row.created_at), { addSuffix: true }),
-    tags: row.tags || [],
+    tags: (row.tags || []).map((tag) => sanitizeText(tag)).filter(Boolean),
     createdAt: row.created_at,
   };
 }
@@ -189,6 +193,17 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
     setSubmitting(true);
     try {
+      const moderation = await moderateContent(newPost);
+      if (!moderation.clean) {
+        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
+        toast({
+          title: "Post blocked by moderation",
+          description: `Please revise your post. Flagged categories: ${categories.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       let authorName = null;
       if (!postAnonymously) {
         const profileDisplayName = await getDisplayNameForUser(user.id);
@@ -212,11 +227,11 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
         userId: user.id,
         author: postAnonymously ? "Anonymous" : authorName || "User",
         isAnonymous: postAnonymously,
-        content: censoredContent,
+        content: sanitizeText(censoredContent),
         likes: 0,
         comments: 0,
         timeAgo: "Just now",
-        tags: tagsForPost,
+        tags: tagsForPost.map((tag) => sanitizeText(tag)).filter(Boolean),
         createdAt: data.created_at,
       };
 
@@ -279,7 +294,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
       setPosts((prev) =>
         prev.map((post) =>
-          post.id === editingPost.id ? { ...post, content: editContent } : post,
+          post.id === editingPost.id ? { ...post, content: sanitizeText(editContent) } : post,
         ),
       );
 

@@ -30,6 +30,7 @@ import {
   updateAnonymousMode,
   updateDiscreetMode,
 } from "@/services/profileService";
+import { sanitizeText } from "@/lib/sanitize";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -40,6 +41,9 @@ const Profile = () => {
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const safeDisplayName = sanitizeText(profile?.display_name);
+  const safeEmailLocalPart = sanitizeText(user?.email?.split("@")[0]);
+  const avatarSource = safeDisplayName || sanitizeText(user?.email) || "U";
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -137,7 +141,7 @@ const Profile = () => {
                 <EyeOff className="h-8 w-8 text-primary" />
               ) : (
                 <span className="text-2xl font-bold text-primary">
-                  {(profile?.display_name || user?.email || "U")[0].toUpperCase()}
+                  {avatarSource[0].toUpperCase()}
                 </span>
               )}
             </div>
@@ -145,7 +149,7 @@ const Profile = () => {
               <h2 className="text-xl font-semibold">
                 {isAnonymous
                   ? "Anonymous User"
-                  : (profile?.display_name || user?.email?.split("@")[0] || "User")}
+                  : (safeDisplayName || safeEmailLocalPart || "User")}
               </h2>
               <p className="text-muted-foreground">
                 {profile?.created_at

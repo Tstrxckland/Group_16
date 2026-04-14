@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Loader2, UserPlus, Users, MessageCircle, X, Check } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
+import { sanitizeText } from "@/lib/sanitize";
 
 const usernameSchema = z
   .string()
@@ -318,7 +319,7 @@ const Friends = () => {
             {profile?.username && (
               <p className="text-xs text-muted-foreground">
                 Share this with friends: {" "}
-                <span className="font-medium text-primary">@{profile.username}</span>
+                <span className="font-medium text-primary">@{sanitizeText(profile.username)}</span>
               </p>
             )}
           </CardContent>
@@ -383,13 +384,15 @@ const Friends = () => {
                         </Avatar>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {request.fromProfile.display_name ||
-                              request.fromProfile.username ||
-                              "Friend"}
+                            {sanitizeText(
+                              request.fromProfile.display_name ||
+                                request.fromProfile.username ||
+                                "Friend"
+                            )}
                           </p>
                           {request.fromProfile.username && (
                             <p className="text-xs text-muted-foreground">
-                              @{request.fromProfile.username}
+                              @{sanitizeText(request.fromProfile.username)}
                             </p>
                           )}
                         </div>
@@ -450,11 +453,11 @@ const Friends = () => {
                         </Avatar>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {friend.display_name || friend.username || "Friend"}
+                            {sanitizeText(friend.display_name || friend.username || "Friend")}
                           </p>
                           {friend.username && (
                             <p className="text-xs text-muted-foreground">
-                              @{friend.username}
+                              @{sanitizeText(friend.username)}
                             </p>
                           )}
                         </div>
@@ -481,7 +484,7 @@ const Friends = () => {
                           onClick={() =>
                             setSelectedFriend({
                               friendshipId: friend.friendshipId,
-                              friendName: friend.display_name || friend.username || "Friend"
+                              friendName: sanitizeText(friend.display_name || friend.username || "Friend")
                             })
                           }
                         >
