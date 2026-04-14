@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
   User,
+  Users,
   Shield,
   Bell,
   Eye,
@@ -33,6 +34,22 @@ interface ProfileData {
   discreet_mode: boolean;
 }
 
+interface PeerDiscoveryPrivacySettings {
+  discoverableInPeerSearch: boolean;
+  allowDirectFriendRequests: boolean;
+  showDisplayNameInDiscovery: boolean;
+  showProgressSignals: boolean;
+}
+
+const PEER_DISCOVERY_PRIVACY_KEY = "peer-discovery-privacy-settings";
+
+const defaultPeerDiscoveryPrivacy: PeerDiscoveryPrivacySettings = {
+  discoverableInPeerSearch: true,
+  allowDirectFriendRequests: true,
+  showDisplayNameInDiscovery: false,
+  showProgressSignals: false,
+};
+
 const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -44,6 +61,9 @@ const Profile = () => {
   const [savingIdentitySafeMode, setSavingIdentitySafeMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [peerDiscoveryPrivacy, setPeerDiscoveryPrivacy] = useState<PeerDiscoveryPrivacySettings>(
+    defaultPeerDiscoveryPrivacy
+  );
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -69,6 +89,35 @@ const Profile = () => {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PEER_DISCOVERY_PRIVACY_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<PeerDiscoveryPrivacySettings>;
+      setPeerDiscoveryPrivacy((prev) => ({
+        ...prev,
+        ...parsed,
+      }));
+    } catch (error) {
+      console.error("Error loading peer discovery privacy settings:", error);
+    }
+  }, []);
+
+  const updatePeerDiscoveryPrivacy = (
+    key: keyof PeerDiscoveryPrivacySettings,
+    value: boolean
+  ) => {
+    setPeerDiscoveryPrivacy((prev) => {
+      const next: PeerDiscoveryPrivacySettings = {
+        ...prev,
+        [key]: value,
+      };
+
+      localStorage.setItem(PEER_DISCOVERY_PRIVACY_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const handleAnonymousToggle = async (checked: boolean) => {
     if (!profile) {
@@ -345,6 +394,100 @@ const Profile = () => {
                 ? "Identity-Safe Mode Active"
                 : "Enable Identity-Safe Mode"}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Peer Discovery Privacy */}
+      <Card className="mb-6 animate-fade-up animation-delay-375">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            Peer Discovery Privacy
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Control how you appear in peer matching and filtering spaces.
+          </p>
+
+          <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
+            Use these settings to reduce unwanted exposure while still finding supportive connections.
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Discoverable in peer search</p>
+                  <p className="text-sm text-muted-foreground">
+                    Let others find you in matching results.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={peerDiscoveryPrivacy.discoverableInPeerSearch}
+                onCheckedChange={(checked) =>
+                  updatePeerDiscoveryPrivacy("discoverableInPeerSearch", checked)
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Show display name in discovery</p>
+                  <p className="text-sm text-muted-foreground">
+                    Off uses a more identity-safe anonymous label.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={peerDiscoveryPrivacy.showDisplayNameInDiscovery}
+                onCheckedChange={(checked) =>
+                  updatePeerDiscoveryPrivacy("showDisplayNameInDiscovery", checked)
+                }
+                disabled={isAnonymous}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Allow direct friend requests</p>
+                  <p className="text-sm text-muted-foreground">
+                    Turn off to require safer, slower introductions.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={peerDiscoveryPrivacy.allowDirectFriendRequests}
+                onCheckedChange={(checked) =>
+                  updatePeerDiscoveryPrivacy("allowDirectFriendRequests", checked)
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Award className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Show progress signals</p>
+                  <p className="text-sm text-muted-foreground">
+                    Share streaks/achievement cues in matching previews.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={peerDiscoveryPrivacy.showProgressSignals}
+                onCheckedChange={(checked) =>
+                  updatePeerDiscoveryPrivacy("showProgressSignals", checked)
+                }
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
