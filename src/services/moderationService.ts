@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ModerationCategory = "profanity" | "crisis" | "slurs";
+export type ModerationCategory = "profanity" | "sensitive" | "crisis";
 
 export interface ModerationFlag {
   category: ModerationCategory;
@@ -10,6 +10,9 @@ export interface ModerationFlag {
 export interface ModerationResult {
   clean: boolean;
   flagged: ModerationFlag[];
+  outcome: "allowed" | "flagged" | "blocked_with_resources";
+  supportiveMessage?: string;
+  resources?: Array<{ label: string; url: string }>;
 }
 
 export async function moderateContent(content: string): Promise<ModerationResult> {
@@ -23,5 +26,11 @@ export async function moderateContent(content: string): Promise<ModerationResult
   return {
     clean: !!parsed?.clean,
     flagged: Array.isArray(parsed?.flagged) ? (parsed?.flagged as ModerationFlag[]) : [],
+    outcome: (parsed?.outcome as ModerationResult["outcome"]) || "allowed",
+    supportiveMessage:
+      typeof parsed?.supportiveMessage === "string" ? parsed.supportiveMessage : undefined,
+    resources: Array.isArray(parsed?.resources)
+      ? (parsed.resources as Array<{ label: string; url: string }>)
+      : undefined,
   };
 }
