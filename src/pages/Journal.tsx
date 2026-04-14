@@ -16,6 +16,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { createJournalEntry, JournalEntry, listJournalEntries, Mood } from "@/services/journalService";
+import { moderateContent } from "@/services/moderationService";
+import { sanitizeText } from "@/lib/sanitize";
 
 const moodOptions = [
   { value: "good" as const, label: "Good day", icon: Smile, color: "bg-sage-100 text-sage-600" },
@@ -107,6 +109,18 @@ const Journal = () => {
     setSaving(true);
 
     try {
+      const textToModerate = `${newEntry.content}\n${newEntry.reflection || ""}`.trim();
+      const moderation = await moderateContent(textToModerate);
+      if (!moderation.clean) {
+        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
+        toast({
+          title: "Entry blocked by moderation",
+          description: `Please revise your entry. Flagged categories: ${categories.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const data = await createJournalEntry({
         userId: user.id,
         mood: newEntry.mood,
@@ -230,10 +244,10 @@ const Journal = () => {
                         <span className="capitalize">{entry.mood}</span>
                       </div>
                     </div>
-                    <p className="text-foreground mb-2">{entry.content}</p>
+                    <p className="text-foreground mb-2">{sanitizeText(entry.content)}</p>
                     {entry.reflection && (
                       <p className="text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3">
-                        {entry.reflection}
+                        {sanitizeText(entry.reflection)}
                       </p>
                     )}
                   </CardContent>
