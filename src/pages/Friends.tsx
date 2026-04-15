@@ -354,8 +354,8 @@ const Friends = () => {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-0 shadow-card">
+        <div className="flex flex-col gap-4">
+          <Card className="border-0 shadow-card min-w-0">
             <CardHeader>
               <CardTitle className="text-base">Friend requests</CardTitle>
               <CardDescription>
@@ -374,34 +374,32 @@ const Friends = () => {
                   {friendRequests.map((request) => (
                     <li
                       key={request.friendshipId}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3"
+                      className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/60 p-3 sm:gap-3"
                     >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback>
-                            {initialsForProfile(request.fromProfile)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {sanitizeText(
-                              request.fromProfile.display_name ||
-                                request.fromProfile.username ||
-                                "Friend"
-                            )}
-                          </p>
-                          {request.fromProfile.username && (
-                            <p className="text-xs text-muted-foreground">
-                              @{sanitizeText(request.fromProfile.username)}
-                            </p>
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarFallback>
+                          {initialsForProfile(request.fromProfile)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {sanitizeText(
+                            request.fromProfile.display_name ||
+                              request.fromProfile.username ||
+                              "Friend"
                           )}
-                        </div>
+                        </p>
+                        {request.fromProfile.username && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            @{sanitizeText(request.fromProfile.username)}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           size="icon"
                           variant="outline"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "decline")
                           }
@@ -411,7 +409,7 @@ const Friends = () => {
                         <Button
                           size="icon"
                           variant="calm"
-                          className="h-8 w-8"
+                          className="h-8 w-8 shrink-0"
                           onClick={() =>
                             handleRespondToRequest(request.friendshipId, "accept")
                           }
@@ -426,7 +424,7 @@ const Friends = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-card">
+          <Card className="border-0 shadow-card min-w-0">
             <CardHeader>
               <CardTitle className="text-base">Your friends</CardTitle>
               <CardDescription>
@@ -445,29 +443,27 @@ const Friends = () => {
                   {friends.map((friend) => (
                     <li
                       key={friend.id}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 p-3"
+                      className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/60 p-3 sm:gap-3"
                     >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback>{initialsForProfile(friend)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {sanitizeText(friend.display_name || friend.username || "Friend")}
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarFallback>{initialsForProfile(friend)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {sanitizeText(friend.display_name || friend.username || "Friend")}
+                        </p>
+                        {friend.username && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            @{sanitizeText(friend.username)}
                           </p>
-                          {friend.username && (
-                            <p className="text-xs text-muted-foreground">
-                              @{sanitizeText(friend.username)}
-                            </p>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           type="button"
                           size="icon"
                           variant="outline"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={removingFriendshipId === friend.friendshipId}
                           onClick={() => handleRemoveFriend(friend.friendshipId)}
                           aria-label="Remove friend"
@@ -479,14 +475,17 @@ const Friends = () => {
                           )}
                         </Button>
                         <Button
-                          size="sm"
+                          type="button"
+                          size="icon"
                           variant="outline"
+                          className="h-8 w-8 shrink-0"
                           onClick={() =>
                             setSelectedFriend({
                               friendshipId: friend.friendshipId,
                               friendName: sanitizeText(friend.display_name || friend.username || "Friend")
                             })
                           }
+                          aria-label="Open chat"
                         >
                           <MessageCircle className="h-4 w-4" />
                         </Button>

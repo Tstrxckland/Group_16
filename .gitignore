@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI local link/cache (do not commit)
+supabase/.temp/
