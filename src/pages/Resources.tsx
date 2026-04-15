@@ -16,6 +16,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+// F7 Resources Portal - Extended via Lovable.dev
+// Before: 3 static links embedded in Profile page
+// After: Dedicated /resources page with search, categories, and discreet mode
+
 type Category = "all" | "crisis" | "anxiety" | "therapy" | "self-help" | "community";
 
 interface Resource {
