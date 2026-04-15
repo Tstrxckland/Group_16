@@ -98,6 +98,12 @@ export function deriveThreadPreview(content: string): string {
   return `${cleaned.slice(0, 97)}…`;
 }
 
+export function deriveThreadBody(content: string): string {
+  const lines = content.split(/\n/).map((l) => l.trim());
+  if (lines.length <= 1) return "";
+  return lines.slice(1).join("\n").trim();
+}
+
 export function postMatchesTopic(post: ForumPost, topicId: TopicId): boolean {
   if (topicId === "all") return true;
   const needle = topicId.toLowerCase();
@@ -129,6 +135,8 @@ function ForumModals() {
     submitPost,
     editingPost,
     cancelEditing,
+    editTitle,
+    setEditTitle,
     editContent,
     setEditContent,
     saveEdit,
@@ -254,6 +262,14 @@ function ForumModals() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <Input
+                placeholder="Add a title"
+                className="rounded-xl text-base"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                aria-label="Edit post title"
+                maxLength={120}
+              />
               <Textarea
                 placeholder="Edit your post..."
                 className="min-h-[120px] rounded-xl text-base"
@@ -275,7 +291,7 @@ function ForumModals() {
                   variant="calm"
                   className="flex-1 rounded-xl"
                   onClick={saveEdit}
-                  disabled={!editContent.trim() || submitting}
+                  disabled={!editTitle.trim() || !editContent.trim() || submitting}
                 >
                   {submitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -809,9 +825,8 @@ export function CommunityPostDetail() {
   }
 
   const title = deriveThreadTitle(post.content);
-  const displayContent = discreetMode
-    ? censorContent(post.content)
-    : post.content;
+  const body = deriveThreadBody(post.content);
+  const displayContent = discreetMode ? censorContent(body) : body;
 
   const topicForBack = topicSlugForBack(post);
   const handleSubmitComment = async () => {
@@ -914,7 +929,9 @@ export function CommunityPostDetail() {
         </CardHeader>
         <CardContent className="space-y-6 p-4 sm:p-6">
           <div className="prose prose-sm max-w-none text-base leading-relaxed text-foreground">
-            <p className="whitespace-pre-wrap">{displayContent}</p>
+            <p className="whitespace-pre-wrap">
+              {displayContent || "No additional details."}
+            </p>
           </div>
 
           {post.tags.length > 0 && (

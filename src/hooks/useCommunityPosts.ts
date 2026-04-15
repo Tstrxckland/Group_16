@@ -99,9 +99,19 @@ export interface UseCommunityPostsReturn {
   editingPost: ForumPost | null;
   startEditing: (post: ForumPost) => void;
   cancelEditing: () => void;
+  editTitle: string;
+  setEditTitle: (v: string) => void;
   editContent: string;
   setEditContent: (v: string) => void;
   saveEdit: () => Promise<void>;
+}
+
+function splitPostContent(content: string): { title: string; body: string } {
+  const normalized = (content || "").replace(/\r\n/g, "\n");
+  const parts = normalized.split("\n");
+  const title = (parts[0] || "").trim();
+  const body = parts.slice(1).join("\n").trim();
+  return { title, body };
 }
 
 export function useCommunityPosts(): UseCommunityPostsReturn {
@@ -117,6 +127,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [editingPost, setEditingPost] = useState<ForumPost | null>(null);
+  const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const fetchPosts = useCallback(async () => {
     try {
@@ -339,25 +350,31 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
   };
 
   const startEditing = (post: ForumPost) => {
+    const { title, body } = splitPostContent(post.content);
     setEditingPost(post);
-    setEditContent(post.content);
+    setEditTitle(title);
+    setEditContent(body);
   };
 
   const cancelEditing = () => {
     setEditingPost(null);
+    setEditTitle("");
     setEditContent("");
   };
 
   const saveEdit = async () => {
-    if (!editingPost || !editContent.trim()) return;
+    const trimmedTitle = editTitle.trim();
+    const trimmedBody = editContent.trim();
+    if (!editingPost || !trimmedTitle || !trimmedBody) return;
+    const nextContent = `${trimmedTitle}\n\n${trimmedBody}`;
 
     setSubmitting(true);
     try {
-      await updateCommunityPostContent(editingPost.id, editContent);
+      await updateCommunityPostContent(editingPost.id, nextContent);
 
       setPosts((prev) =>
         prev.map((post) =>
-          post.id === editingPost.id ? { ...post, content: sanitizeText(editContent) } : post,
+          post.id === editingPost.id ? { ...post, content: sanitizeText(nextContent) } : post,
         ),
       );
 
@@ -404,6 +421,8 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     editingPost,
     startEditing,
     cancelEditing,
+    editTitle,
+    setEditTitle,
     editContent,
     setEditContent,
     saveEdit,
