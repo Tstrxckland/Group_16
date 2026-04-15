@@ -235,7 +235,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     }
   };
 
-  const adjustPostCommentCount = (postId: string, delta: number) => {
+  const adjustPostCommentCount = useCallback((postId: string, delta: number) => {
     setPosts((prev) =>
       prev.map((post) =>
         post.id === postId
@@ -243,13 +243,13 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
           : post,
       ),
     );
-  };
+  }, []);
 
-  const setPostCommentCount = (postId: string, count: number) => {
+  const setPostCommentCount = useCallback((postId: string, count: number) => {
     setPosts((prev) =>
       prev.map((post) => (post.id === postId ? { ...post, comments: Math.max(0, count) } : post)),
     );
-  };
+  }, []);
 
   const submitPost = async () => {
     const trimmedTitle = newPostTitle.trim();

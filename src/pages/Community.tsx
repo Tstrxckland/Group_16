@@ -14,7 +14,9 @@ import { CommunityForumProvider, useCommunityForum } from "@/context/communityFo
 import { PostReportFlow } from "@/components/forum/PostReportFlow";
 import {
   createComment,
+  deleteComment,
   listCommentsByPost,
+  updateCommentContent,
   type CommunityCommentRow,
 } from "@/services/communityCommentsService";
 import { moderateContent } from "@/services/moderationService";
@@ -721,6 +723,10 @@ export function CommunityPostDetail() {
   const [commentText, setCommentText] = useState("");
   const [commentAnonymously, setCommentAnonymously] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editingReplyText, setEditingReplyText] = useState("");
+  const [savingReply, setSavingReply] = useState(false);
+  const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
 
   const handleSubmitReport = async (payload: {
     postId: string;
@@ -882,6 +888,79 @@ export function CommunityPostDetail() {
     }
   };
 
+  const handleSaveEditReply = async () => {
+    if (!editingReplyId || !postId || !user) return;
+    const trimmed = editingReplyText.trim();
+    if (!trimmed) return;
+    if (trimmed.length > 1000) {
+      toast({
+        title: "Reply is too long",
+        description: "Please keep replies under 1000 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingReply(true);
+    try {
+      const moderation = await moderateContent(trimmed);
+      if (!moderation.clean) {
+        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
+        toast({
+          title: "Reply blocked by moderation",
+          description: `Please revise your reply. Flagged categories: ${categories.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const updated = await updateCommentContent(editingReplyId, trimmed);
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setEditingReplyId(null);
+      setEditingReplyText("");
+      toast({
+        title: "Reply updated",
+        description: "Your changes are visible in this thread.",
+      });
+    } catch (error) {
+      console.error("Error updating reply:", error);
+      toast({
+        title: "Couldn't update reply",
+        description: messageFromSupabaseError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingReply(false);
+    }
+  };
+
+  const handleDeleteReply = async (commentId: string) => {
+    if (!postId) return;
+    setDeletingReplyId(commentId);
+    try {
+      await deleteComment(commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      adjustPostCommentCount(postId, -1);
+      if (editingReplyId === commentId) {
+        setEditingReplyId(null);
+        setEditingReplyText("");
+      }
+      toast({
+        title: "Reply removed",
+        description: "Your reply has been deleted from this thread.",
+      });
+    } catch (error) {
+      console.error("Error deleting reply:", error);
+      toast({
+        title: "Couldn't delete reply",
+        description: messageFromSupabaseError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingReplyId(null);
+    }
+  };
+
   return (
     <article className="space-y-5">
       <div className="flex items-center gap-2">
@@ -1021,19 +1100,95 @@ export function CommunityPostDetail() {
               <ul className="space-y-3">
                 {comments.map((comment) => (
                   <li key={comment.id} className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium text-foreground">
                         {comment.is_anonymous
                           ? "Anonymous"
                           : sanitizeText(comment.author_name || "Community member")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(comment.created_at).toLocaleString()}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {user?.id === comment.user_id && editingReplyId !== comment.id && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl px-2"
+                              onClick={() => {
+                                setEditingReplyId(comment.id);
+                                setEditingReplyText(comment.content);
+                              }}
+                              aria-label="Edit reply"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl px-2 text-destructive hover:text-destructive"
+                              disabled={deletingReplyId === comment.id}
+                              onClick={() => handleDeleteReply(comment.id)}
+                              aria-label="Delete reply"
+                            >
+                              {deletingReplyId === comment.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline">Delete</span>
+                            </Button>
+                          </>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(comment.created_at).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
-                      {sanitizeText(comment.content)}
-                    </p>
+                    {editingReplyId === comment.id ? (
+                      <div className="mt-2 space-y-2">
+                        <Textarea
+                          value={editingReplyText}
+                          onChange={(e) => setEditingReplyText(e.target.value)}
+                          className="min-h-[90px]"
+                          maxLength={1000}
+                          aria-label="Edit reply text"
+                        />
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => {
+                              setEditingReplyId(null);
+                              setEditingReplyText("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="calm"
+                            className="rounded-xl"
+                            onClick={handleSaveEditReply}
+                            disabled={savingReply || !editingReplyText.trim()}
+                          >
+                            {savingReply ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                        {sanitizeText(comment.content)}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
