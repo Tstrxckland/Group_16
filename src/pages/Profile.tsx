@@ -25,15 +25,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAnonymityMode } from "@/hooks/useAnonymityMode";
-import { supabase } from "@/integrations/supabase/client";
-
-interface ProfileData {
-  id: string;
-  display_name: string | null;
-  is_anonymous: boolean;
-  created_at: string;
-  discreet_mode: boolean;
-}
+import {
+  deleteAccount,
+  getProfileByUserId,
+  ProfileData,
+  updateDiscreetMode,
+} from "@/services/profileService";
+import { sanitizeText } from "@/lib/sanitize";
 
 interface PeerDiscoveryPrivacySettings {
   discoverableInPeerSearch: boolean;
@@ -69,24 +67,20 @@ const Profile = () => {
   const [peerDiscoveryPrivacy, setPeerDiscoveryPrivacy] = useState<PeerDiscoveryPrivacySettings>(
     defaultPeerDiscoveryPrivacy
   );
+  const safeDisplayName = sanitizeText(profile?.display_name);
+  const safeEmailLocalPart = sanitizeText(user?.email?.split("@")[0]);
+  const avatarSource = safeDisplayName || sanitizeText(user?.email) || "U";
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, display_name, is_anonymous, created_at, discreet_mode")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) {
+    try {
+      const data = await getProfileByUserId(user.id);
+      if (data) {
+        setProfile(data);
+        setPrivacyMode(data.discreet_mode);
+      }
+    } catch (error) {
       console.error("Error loading profile:", error);
-      return;
-    }
-
-    if (data) {
-      const typed = data as ProfileData;
-      setProfile(typed);
-      setPrivacyMode(typed.discreet_mode);
     }
   }, [user]);
 
@@ -153,12 +147,9 @@ const Profile = () => {
     setPrivacyMode(checked);
     if (!profile) return;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ discreet_mode: checked })
-      .eq("id", profile.id);
-
-    if (error) {
+    try {
+      await updateDiscreetMode(profile.id, checked);
+    } catch (error) {
       console.error("Error updating discreet mode:", error);
       toast({
         title: "Couldn't save preference",
@@ -189,11 +180,7 @@ const Profile = () => {
       if (anonymityError) throw anonymityError;
 
       setPrivacyMode(true);
-      const { error: discreetError } = await supabase
-        .from("profiles")
-        .update({ discreet_mode: true })
-        .eq("id", profile.id);
-      if (discreetError) throw discreetError;
+      await updateDiscreetMode(profile.id, true);
 
       toast({
         title: "Identity-safe mode enabled",
@@ -257,7 +244,7 @@ const Profile = () => {
                 <EyeOff className="h-8 w-8 text-primary" />
               ) : (
                 <span className="text-2xl font-bold text-primary">
-                  {(profile?.display_name || user?.email || "U")[0].toUpperCase()}
+                  {avatarSource[0].toUpperCase()}
                 </span>
               )}
             </div>
@@ -265,7 +252,7 @@ const Profile = () => {
               <h2 className="text-xl font-semibold">
                 {anonymityEnabled
                   ? "Anonymous User"
-                  : (profile?.display_name || user?.email?.split("@")[0] || "User")}
+                  : (safeDisplayName || safeEmailLocalPart || "User")}
               </h2>
               <p className="text-muted-foreground">
                 {profile?.created_at
@@ -585,9 +572,9 @@ const Profile = () => {
 
           if (!confirmed) return;
 
-          const { error } = await supabase.functions.invoke("delete-account");
-
-          if (error) {
+          try {
+            await deleteAccount();
+          } catch (error) {
             console.error("Error deleting account", error);
             toast({
               title: "Error deleting account",

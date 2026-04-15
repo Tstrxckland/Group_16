@@ -1,48 +1,44 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import {
+  createFriendRequest,
+  findExistingFriendship,
+  findProfileByUsername,
+  FriendRequest,
+  FriendWithFriendshipId,
+  ProfileRow,
+  loadFriendsDashboard,
+  removeFriend,
+  respondToFriendRequest,
+  updateProfileUsername,
+} from "@/services/friendsService";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, UserPlus, Users, MessageCircle, X, Check } from "lucide-react";
 import { MessageThread } from "@/components/MessageThread";
-
-interface ProfileRow {
-  id: string;
-  user_id: string;
-  username: string | null;
-  display_name: string | null;
-}
-
-type FriendRequestStatus = "pending" | "accepted" | "declined" | "blocked";
-
-interface FriendshipRow {
-  id: string;
-  requester_profile_id: string;
-  addressee_profile_id: string;
-  status: FriendRequestStatus;
-  created_at: string;
-  accepted_at: string | null;
-}
-
-interface FriendRequest {
-  friendshipId: string;
-  fromProfile: ProfileRow;
-  createdAt: string;
-}
-
-interface FriendWithFriendshipId extends ProfileRow {
-  friendshipId: string;
-}
+import { sanitizeText } from "@/lib/sanitize";
 
 const usernameSchema = z
   .string()
   .min(3, "Username must be at least 3 characters")
   .max(20, "Username must be at most 20 characters")
   .regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers and underscores are allowed");
+
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "");
 
 const Friends = () => {
   const { user } = useAuth();
@@ -59,21 +55,18 @@ const Friends = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<{ friendshipId: string; friendName: string } | null>(null);
   const [removingFriendshipId, setRemovingFriendshipId] = useState<string | null>(null);
+  const [friendToRemove, setFriendToRemove] = useState<FriendWithFriendshipId | null>(null);
+  const [addFriendFeedback, setAddFriendFeedback] = useState<string | null>(null);
 
   const loadProfileAndFriends = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
 
     try {
-      const { data: profileRow, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, user_id, username, display_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const { profile: loadedProfile, friendRequests: loadedRequests, friends: loadedFriends } =
+        await loadFriendsDashboard(user.id);
 
-      if (profileError) throw profileError;
-
-      if (!profileRow) {
+      if (!loadedProfile) {
         toast({
           title: "Profile not found",
           description: "We couldn't find your profile. Try signing out and back in.",
@@ -82,96 +75,11 @@ const Friends = () => {
         return;
       }
 
-      const typedProfile = profileRow as ProfileRow;
-      setProfile(typedProfile);
-      setUsernameInput(typedProfile.username ?? "");
-
-      // Load pending friend requests where current user is the addressee
-      const { data: pendingFriendships, error: pendingError } = await supabase
-        .from("friendships")
-        .select("id, requester_profile_id, addressee_profile_id, status, created_at, accepted_at")
-        .eq("addressee_profile_id", typedProfile.id)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
-
-      if (pendingError) throw pendingError;
-
-      const requesterIds = (pendingFriendships ?? []).map((f) => f.requester_profile_id);
-      let requestProfilesMap: Record<string, ProfileRow> = {};
-
-      if (requesterIds.length > 0) {
-        const { data: requesterProfiles, error: requesterError } = await supabase
-          .from("profiles")
-          .select("id, user_id, username, display_name")
-          .in("id", requesterIds);
-
-        if (requesterError) throw requesterError;
-
-        requestProfilesMap = (requesterProfiles ?? []).reduce((acc, p) => {
-          acc[p.id] = p as ProfileRow;
-          return acc;
-        }, {} as Record<string, ProfileRow>);
-      }
-
-      const formattedRequests: FriendRequest[] = (pendingFriendships ?? [])
-        .map((f: any) => ({
-          friendshipId: f.id as string,
-          fromProfile: requestProfilesMap[f.requester_profile_id as string],
-          createdAt: f.created_at as string,
-        }))
-        .filter((r) => r.fromProfile);
-
-      setFriendRequests(formattedRequests);
-
-      // Load accepted friendships where current user is either side
-      const { data: asRequester, error: asRequesterError } = await supabase
-        .from("friendships")
-        .select("id, requester_profile_id, addressee_profile_id, status, created_at, accepted_at")
-        .eq("requester_profile_id", typedProfile.id)
-        .eq("status", "accepted");
-
-      if (asRequesterError) throw asRequesterError;
-
-      const { data: asAddressee, error: asAddresseeError } = await supabase
-        .from("friendships")
-        .select("id, requester_profile_id, addressee_profile_id, status, created_at, accepted_at")
-        .eq("addressee_profile_id", typedProfile.id)
-        .eq("status", "accepted");
-
-      if (asAddresseeError) throw asAddresseeError;
-
-      const friendProfileIds = [
-        ...(asRequester ?? []).map((f) => f.addressee_profile_id as string),
-        ...(asAddressee ?? []).map((f) => f.requester_profile_id as string),
-      ];
-
-      const uniqueFriendProfileIds = Array.from(new Set(friendProfileIds));
-
-      // Create a map of profile_id to friendship_id
-      const profileIdToFriendshipId: Record<string, string> = {};
-      [...(asRequester ?? []), ...(asAddressee ?? [])].forEach((f) => {
-        const friendProfileId = f.requester_profile_id === typedProfile.id 
-          ? f.addressee_profile_id 
-          : f.requester_profile_id;
-        profileIdToFriendshipId[friendProfileId as string] = f.id as string;
-      });
-
-      let friendProfiles: FriendWithFriendshipId[] = [];
-      if (uniqueFriendProfileIds.length > 0) {
-        const { data: friendProfilesData, error: friendsError } = await supabase
-          .from("profiles")
-          .select("id, user_id, username, display_name")
-          .in("id", uniqueFriendProfileIds);
-
-        if (friendsError) throw friendsError;
-        friendProfiles = (friendProfilesData ?? []).map((p) => ({
-          ...(p as ProfileRow),
-          friendshipId: profileIdToFriendshipId[p.id]
-        }));
-      }
-
-      setFriends(friendProfiles);
-    } catch (error: any) {
+      setProfile(loadedProfile);
+      setUsernameInput(loadedProfile.username ?? "");
+      setFriendRequests(loadedRequests);
+      setFriends(loadedFriends);
+    } catch (error: unknown) {
       console.error("Error loading friends:", error);
       toast({
         title: "Something went wrong",
@@ -193,7 +101,8 @@ const Friends = () => {
   const handleSaveUsername = async () => {
     if (!profile) return;
 
-    const parsed = usernameSchema.safeParse(usernameInput.trim());
+    const normalizedUsername = usernameInput.trim().toLowerCase();
+    const parsed = usernameSchema.safeParse(normalizedUsername);
     if (!parsed.success) {
       toast({
         title: "Invalid username",
@@ -205,35 +114,28 @@ const Friends = () => {
 
     setSavingUsername(true);
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .update({ username: parsed.data })
-        .eq("id", profile.id)
-        .select("id, user_id, username, display_name")
-        .maybeSingle();
-
-      if (error) {
-        if (error.message.includes("duplicate") || error.message.includes("already exists")) {
-          toast({
-            title: "Username taken",
-            description: "That username is already in use. Try another one.",
-            variant: "destructive",
-          });
-        } else {
-          throw error;
-        }
-        return;
-      }
+      const data = await updateProfileUsername(profile.id, parsed.data);
 
       if (data) {
-        const updated = data as ProfileRow;
-        setProfile(updated);
-        toast({
-          title: "Username saved",
-          description: "Friends can now find you by your username.",
-        });
+        setProfile(data);
       }
-    } catch (error: any) {
+
+      setUsernameInput(parsed.data);
+      toast({
+        title: "Username saved",
+        description: "Friends can now find you by your username.",
+      });
+      await loadProfileAndFriends();
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (message.includes("duplicate") || message.includes("already exists")) {
+        toast({
+          title: "Username taken",
+          description: "That username is already in use. Try another one.",
+          variant: "destructive",
+        });
+        return;
+      }
       console.error("Error saving username:", error);
       toast({
         title: "Couldn't save username",
@@ -249,8 +151,10 @@ const Friends = () => {
     if (!profile) return;
 
     const targetUsername = friendUsername.trim();
+    setAddFriendFeedback(null);
     const parsed = usernameSchema.safeParse(targetUsername);
     if (!parsed.success) {
+      setAddFriendFeedback(parsed.error.errors[0]?.message ?? null);
       toast({
         title: "Invalid username",
         description: parsed.error.errors[0]?.message,
@@ -270,15 +174,10 @@ const Friends = () => {
 
     setSendingRequest(true);
     try {
-      const { data: targetProfile, error: targetError } = await supabase
-        .from("profiles")
-        .select("id, user_id, username, display_name")
-        .ilike("username", targetUsername)
-        .maybeSingle();
-
-      if (targetError) throw targetError;
+      const targetProfile = await findProfileByUsername(targetUsername);
 
       if (!targetProfile) {
+        setAddFriendFeedback("No user found with that username.");
         toast({
           title: "User not found",
           description: "We couldn't find anyone with that username.",
@@ -287,33 +186,23 @@ const Friends = () => {
         return;
       }
 
-      // Check if friendship already exists in either direction
-      const { data: existing, error: existingError } = await supabase
-        .from("friendships")
-        .select("id, status, requester_profile_id, addressee_profile_id")
-        .or(
-          `and(requester_profile_id.eq.${profile.id},addressee_profile_id.eq.${targetProfile.id}),` +
-            `and(requester_profile_id.eq.${targetProfile.id},addressee_profile_id.eq.${profile.id})`
-        )
-        .maybeSingle();
-
-      if (existingError && existingError.code !== "PGRST116") {
-        // PGRST116 = Results contain 0 rows
-        throw existingError;
-      }
+      const existing = await findExistingFriendship(profile.id, targetProfile.id);
 
       if (existing) {
         if (existing.status === "pending") {
+          setAddFriendFeedback("A friend request is already pending.");
           toast({
             title: "Request already pending",
             description: "There's already a friend request between you.",
           });
         } else if (existing.status === "accepted") {
+          setAddFriendFeedback("You are already friends with this user.");
           toast({
             title: "Already friends",
             description: "You're already connected with this person.",
           });
         } else {
+          setAddFriendFeedback("There is already a previous request between you.");
           toast({
             title: "Request exists",
             description: "There's already a previous request between you. Try again later.",
@@ -322,35 +211,27 @@ const Friends = () => {
         return;
       }
 
-      const { error: insertError } = await supabase.from("friendships").insert({
-        requester_profile_id: profile.id,
-        addressee_profile_id: (targetProfile as any).id,
-        status: "pending",
-      });
-
-      if (insertError) {
-        if (insertError.message.includes("unique") || insertError.message.includes("duplicate")) {
-          toast({
-            title: "Request already sent",
-            description: "There's already a friend request between you.",
-            variant: "destructive",
-          });
-        } else {
-          throw insertError;
-        }
-        return;
-      }
+      await createFriendRequest(profile.id, targetProfile.id);
 
       setFriendUsername("");
+      setAddFriendFeedback("Friend request sent successfully.");
       toast({
         title: "Friend request sent",
-        description:
-          "Your request has been sent to " +
-          ((targetProfile as any).username || "that user") +
-          ".",
+        description: "Your request has been sent to " + (targetProfile.username || "that user") + ".",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (message.includes("unique") || message.includes("duplicate")) {
+        setAddFriendFeedback("A request already exists with this user.");
+        toast({
+          title: "Request already sent",
+          description: "There's already a friend request between you.",
+          variant: "destructive",
+        });
+        return;
+      }
       console.error("Error sending friend request:", error);
+      setAddFriendFeedback("Couldn't send request. Double-check the username and try again.");
       toast({
         title: "Couldn't send request",
         description: "Please double-check the username and try again.",
@@ -364,24 +245,14 @@ const Friends = () => {
 
   const handleRespondToRequest = async (friendshipId: string, action: "accept" | "decline") => {
     try {
-      const update: Partial<FriendshipRow> =
-        action === "accept"
-          ? { status: "accepted", accepted_at: new Date().toISOString() }
-          : { status: "declined" };
-
-      const { error } = await supabase
-        .from("friendships")
-        .update(update)
-        .eq("id", friendshipId);
-
-      if (error) throw error;
+      await respondToFriendRequest(friendshipId, action);
 
       toast({
         title: action === "accept" ? "Friend added" : "Request declined",
       });
 
       loadProfileAndFriends();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating friend request:", error);
       toast({
         title: "Couldn't update request",
@@ -395,12 +266,7 @@ const Friends = () => {
     try {
       setRemovingFriendshipId(friendshipId);
 
-      const { error } = await supabase
-        .from("friendships")
-        .delete()
-        .eq("id", friendshipId);
-
-      if (error) throw error;
+      await removeFriend(friendshipId);
 
       if (selectedFriend?.friendshipId === friendshipId) {
         setSelectedFriend(null);
@@ -412,7 +278,7 @@ const Friends = () => {
       });
 
       loadProfileAndFriends();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error removing friend:", error);
       toast({
         title: "Couldn't remove friend",
@@ -422,6 +288,12 @@ const Friends = () => {
     } finally {
       setRemovingFriendshipId(null);
     }
+  };
+
+  const handleConfirmRemoveFriend = async () => {
+    if (!friendToRemove) return;
+    await handleRemoveFriend(friendToRemove.friendshipId);
+    setFriendToRemove(null);
   };
 
   const initialsForProfile = (p: ProfileRow | FriendWithFriendshipId) => {
@@ -478,7 +350,7 @@ const Friends = () => {
             {profile?.username && (
               <p className="text-xs text-muted-foreground">
                 Share this with friends: {" "}
-                <span className="font-medium text-primary">@{profile.username}</span>
+                <span className="font-medium text-primary">@{sanitizeText(profile.username)}</span>
               </p>
             )}
           </CardContent>
@@ -497,7 +369,10 @@ const Friends = () => {
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               value={friendUsername}
-              onChange={(e) => setFriendUsername(e.target.value)}
+              onChange={(e) => {
+                setFriendUsername(e.target.value);
+                if (addFriendFeedback) setAddFriendFeedback(null);
+              }}
               placeholder="Friend's username"
               className="sm:max-w-xs"
             />
@@ -511,6 +386,11 @@ const Friends = () => {
               Send request
             </Button>
           </CardContent>
+          {addFriendFeedback && (
+            <CardContent className="pt-0">
+              <p className="text-xs text-muted-foreground">{addFriendFeedback}</p>
+            </CardContent>
+          )}
         </Card>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -543,13 +423,15 @@ const Friends = () => {
                         </Avatar>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {request.fromProfile.display_name ||
-                              request.fromProfile.username ||
-                              "Friend"}
+                            {sanitizeText(
+                              request.fromProfile.display_name ||
+                                request.fromProfile.username ||
+                                "Friend"
+                            )}
                           </p>
                           {request.fromProfile.username && (
                             <p className="text-xs text-muted-foreground">
-                              @{request.fromProfile.username}
+                              @{sanitizeText(request.fromProfile.username)}
                             </p>
                           )}
                         </div>
@@ -610,11 +492,11 @@ const Friends = () => {
                         </Avatar>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {friend.display_name || friend.username || "Friend"}
+                            {sanitizeText(friend.display_name || friend.username || "Friend")}
                           </p>
                           {friend.username && (
                             <p className="text-xs text-muted-foreground">
-                              @{friend.username}
+                              @{sanitizeText(friend.username)}
                             </p>
                           )}
                         </div>
@@ -626,7 +508,7 @@ const Friends = () => {
                           variant="outline"
                           className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={removingFriendshipId === friend.friendshipId}
-                          onClick={() => handleRemoveFriend(friend.friendshipId)}
+                          onClick={() => setFriendToRemove(friend)}
                           aria-label="Remove friend"
                         >
                           {removingFriendshipId === friend.friendshipId ? (
@@ -641,7 +523,7 @@ const Friends = () => {
                           onClick={() =>
                             setSelectedFriend({
                               friendshipId: friend.friendshipId,
-                              friendName: friend.display_name || friend.username || "Friend"
+                              friendName: sanitizeText(friend.display_name || friend.username || "Friend")
                             })
                           }
                         >
@@ -681,6 +563,29 @@ const Friends = () => {
             </CardContent>
           </Card>
         )}
+
+        <AlertDialog open={!!friendToRemove} onOpenChange={(open) => !open && setFriendToRemove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove friend?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {friendToRemove
+                  ? `This will remove ${sanitizeText(friendToRemove.display_name || friendToRemove.username || "this friend")} from your friends list.`
+                  : "This will remove this friend from your friends list."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!removingFriendshipId}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleConfirmRemoveFriend}
+                disabled={!!removingFriendshipId}
+              >
+                {removingFriendshipId ? "Removing..." : "Remove friend"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </section>
     </main>
   );

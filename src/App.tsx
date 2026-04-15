@@ -13,7 +13,12 @@ import Dashboard from "./pages/Dashboard";
 import Challenges from "./pages/Challenges";
 import Calm from "./pages/Calm";
 import Journal from "./pages/Journal";
-import Community from "./pages/Community";
+import {
+  CommunityLayout,
+  CommunityForumHome,
+  CommunityThreadList,
+  CommunityPostDetail,
+} from "./pages/Community";
 import Friends from "./pages/Friends";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
@@ -42,7 +47,11 @@ const App = () => (
                 <Route path="/challenges" element={<Challenges />} />
                 <Route path="/calm" element={<Calm />} />
                 <Route path="/journal" element={<Journal />} />
-                <Route path="/community" element={<Community />} />
+                <Route path="/community" element={<CommunityLayout />}>
+                  <Route index element={<CommunityForumHome />} />
+                  <Route path="t/:topicId" element={<CommunityThreadList />} />
+                  <Route path="p/:postId" element={<CommunityPostDetail />} />
+                </Route>
                 <Route path="/friends" element={<Friends />} />
                 <Route path="/profile" element={<Profile />} />
               </Route>

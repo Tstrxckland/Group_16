@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  getCompletedChallengesCount,
+  getJournalEntryDates,
+} from "@/services/userStatsService";
 
 interface UserStats {
   completedChallenges: number;
@@ -56,34 +59,17 @@ export const useUserStats = (): UserStats => {
     setLoading(true);
 
     try {
-      // Get completed challenges count
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("completed_challenges")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const completedCount = await getCompletedChallengesCount(user.id);
+      setCompletedChallenges(completedCount);
 
-      if (profileData?.completed_challenges) {
-        setCompletedChallenges(profileData.completed_challenges.length);
-      } else {
-        setCompletedChallenges(0);
-      }
-
-      // Get journal entries count and dates for streak
-      const { data: journalData } = await supabase
-        .from("journal_entries")
-        .select("created_at")
-        .eq("user_id", user.id);
-
-      if (journalData) {
-        setJournalEntries(journalData.length);
-        setJournalStreak(calculateStreak(journalData.map(e => e.created_at)));
-      } else {
-        setJournalEntries(0);
-        setJournalStreak(0);
-      }
+      const journalDates = await getJournalEntryDates(user.id);
+      setJournalEntries(journalDates.length);
+      setJournalStreak(calculateStreak(journalDates));
     } catch (error) {
       console.error("Error loading user stats:", error);
+      setCompletedChallenges(0);
+      setJournalEntries(0);
+      setJournalStreak(0);
     } finally {
       setLoading(false);
     }
