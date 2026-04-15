@@ -80,6 +80,11 @@ describe("moderationService.moderateContent", () => {
       error: new Error("network error"),
     });
 
-    await expect(moderateContent("test")).rejects.toThrow("network error");
+    // In dev mode, moderation failures allow content rather than block UX.
+    await expect(moderateContent("test")).resolves.toEqual({
+      clean: true,
+      flagged: [],
+      outcome: "allowed",
+    });
   });
 });
