@@ -22,6 +22,7 @@ import {
 import Friends from "./pages/Friends";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import Resources from "./pages/Resources";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -54,6 +55,7 @@ const App = () => (
                 </Route>
                 <Route path="/friends" element={<Friends />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/resources" element={<Resources />} />
               </Route>
             </Route>
 

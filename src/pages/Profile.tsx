@@ -116,11 +116,7 @@ const Profile = () => {
     { name: "Month Strong", description: "30-day streak", earned: journalStreak >= 30 },
   ];
 
-  const resources = [
-    { name: "Crisis Support Lines", description: "24/7 help when you need it", url: "https://findahelpline.com" },
-    { name: "Anxiety Resources", description: "Articles and guides", url: "https://www.cci.health.wa.gov.au/Resources/Looking-after-yourself/anxiety" },
-    { name: "Find a Therapist", description: "Professional support", url: "https://www.betterhelp.com" },
-  ];
+  // Resources are now on /resources page
 
   return (
     <div className="gradient-hero min-h-screen px-6 py-8">
@@ -273,35 +269,19 @@ const Profile = () => {
         </CardContent>
       </Card>
 
-      {/* Resources */}
-      <Card className="mb-6 animate-fade-up animation-delay-500">
-        <CardHeader>
-          <CardTitle className="text-lg">Resources Portal</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {resources.map((resource) => (
-            <div
-              key={resource.name}
-              className="flex items-center justify-between rounded-xl p-3 hover:bg-muted/50 cursor-pointer transition-colors"
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                window.open(resource.url, "_blank", "noopener,noreferrer");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  window.open(resource.url, "_blank", "noopener,noreferrer");
-                }
-              }}
-            >
-              <div>
-                <p className="font-medium">{resource.name}</p>
-                <p className="text-sm text-muted-foreground">{resource.description}</p>
-              </div>
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+      {/* Resources Link */}
+      <Card className="mb-6 animate-fade-up animation-delay-500 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => navigate("/resources")}
+      >
+        <CardContent className="p-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ExternalLink className="h-5 w-5 text-primary" />
+            <div>
+              <p className="font-semibold">Resources Portal</p>
+              <p className="text-sm text-muted-foreground">Support lines, tools & more</p>
             </div>
-          ))}
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </CardContent>
       </Card>
 

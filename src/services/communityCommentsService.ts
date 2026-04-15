@@ -11,11 +11,11 @@ export interface CommunityCommentRow {
 }
 
 export async function listCommentsByPost(postId: string): Promise<CommunityCommentRow[]> {
-  const { data, error } = await supabase
-    .from("community_post_comments")
+  const { data, error } = await (supabase
+    .from("community_post_comments" as any)
     .select("*")
     .eq("post_id", postId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true }) as any);
 
   if (error) throw error;
   return (data as CommunityCommentRow[]) ?? [];
@@ -28,8 +28,8 @@ export async function createComment(input: {
   isAnonymous: boolean;
   content: string;
 }): Promise<CommunityCommentRow> {
-  const { data, error } = await supabase
-    .from("community_post_comments")
+  const { data, error } = await (supabase
+    .from("community_post_comments" as any)
     .insert({
       post_id: input.postId,
       user_id: input.userId,
@@ -38,7 +38,7 @@ export async function createComment(input: {
       content: input.content,
     })
     .select("*")
-    .single();
+    .single() as any);
 
   if (error) throw error;
   return data as CommunityCommentRow;
