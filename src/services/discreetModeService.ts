@@ -15,8 +15,15 @@ export function subscribeToDiscreetModeChanges(
   userId: string,
   onUpdate: (discreetMode: boolean) => void
 ): () => void {
+  // Use a unique channel name per subscription instance.
+  // Reusing a channel key across mounted components can trigger:
+  // "cannot add 'postgres_changes' callbacks ... after subscribe".
+  const channelName = `discreet-mode-changes:${userId}:${Math.random()
+    .toString(36)
+    .slice(2)}`;
+
   const channel = supabase
-    .channel("discreet-mode-changes")
+    .channel(channelName)
     .on(
       "postgres_changes",
       {

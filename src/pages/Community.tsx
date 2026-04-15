@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +38,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import { censorContent } from "@/lib/contentModeration";
+import { messageFromSupabaseError } from "@/lib/supabaseErrors";
 
 const TOPIC_IDS = ["all", "wins", "support", "college", "work"] as const;
 export type TopicId = (typeof TOPIC_IDS)[number];
@@ -88,7 +90,8 @@ export function deriveThreadTitle(content: string): string {
 
 export function deriveThreadPreview(content: string): string {
   const lines = content.split(/\n/).map((l) => l.trim()).filter(Boolean);
-  const body = lines.length > 1 ? lines.slice(1).join(" ") : content.trim();
+  if (lines.length <= 1) return "";
+  const body = lines.slice(1).join(" ");
   const cleaned = body.replace(/\s+/g, " ").trim();
   if (!cleaned) return "";
   if (cleaned.length <= 100) return cleaned;
@@ -116,6 +119,8 @@ function ForumModals() {
     setIsPosting,
     newPostTopicId,
     setNewPostTopicId,
+    newPostTitle,
+    setNewPostTitle,
     newPost,
     setNewPost,
     postAnonymously,
@@ -154,6 +159,14 @@ function ForumModals() {
               )}
             </CardHeader>
             <CardContent className="space-y-4">
+              <Input
+                placeholder="Add a title"
+                className="rounded-xl text-base"
+                value={newPostTitle}
+                onChange={(e) => setNewPostTitle(e.target.value)}
+                aria-label="Add a title"
+                maxLength={120}
+              />
               <Textarea
                 placeholder="What's on your mind? Share a win, ask for support, or just vent..."
                 className="min-h-[120px] rounded-xl text-base"
@@ -202,6 +215,8 @@ function ForumModals() {
                   className="flex-1 rounded-xl"
                   onClick={() => {
                     setNewPostTopicId("all");
+                    setNewPostTitle("");
+                    setNewPost("");
                     setIsPosting(false);
                   }}
                   disabled={submitting}
@@ -212,7 +227,7 @@ function ForumModals() {
                   variant="calm"
                   className="flex-1 rounded-xl"
                   onClick={submitPost}
-                  disabled={!newPost.trim() || submitting}
+                  disabled={!newPostTitle.trim() || !newPost.trim() || submitting}
                 >
                   {submitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -674,6 +689,8 @@ export function CommunityPostDetail() {
     loading,
     likedPosts,
     toggleLike,
+    adjustPostCommentCount,
+    setPostCommentCount,
     startEditing,
     deletePost,
     refetchPosts,
@@ -742,13 +759,16 @@ export function CommunityPostDetail() {
       setLoadingComments(true);
       try {
         const data = await listCommentsByPost(postId);
-        if (!cancelled) setComments(data);
+        if (!cancelled) {
+          setComments(data);
+          setPostCommentCount(postId, data.length);
+        }
       } catch (error) {
         console.error("Error loading comments:", error);
         if (!cancelled) {
           toast({
             title: "Couldn't load replies",
-            description: "Please try again in a moment.",
+            description: messageFromSupabaseError(error),
             variant: "destructive",
           });
         }
@@ -760,7 +780,7 @@ export function CommunityPostDetail() {
     return () => {
       cancelled = true;
     };
-  }, [postId, toast]);
+  }, [postId, setPostCommentCount, toast]);
 
   if (!postId) {
     return null;
@@ -828,6 +848,7 @@ export function CommunityPostDetail() {
       });
 
       setComments((prev) => [...prev, inserted]);
+      adjustPostCommentCount(postId, 1);
       setCommentText("");
       toast({
         title: "Reply posted",
@@ -837,7 +858,7 @@ export function CommunityPostDetail() {
       console.error("Error creating reply:", error);
       toast({
         title: "Couldn't post reply",
-        description: "Please try again in a moment.",
+        description: messageFromSupabaseError(error),
         variant: "destructive",
       });
     } finally {

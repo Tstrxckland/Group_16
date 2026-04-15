@@ -3,17 +3,24 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  countCommentsForPost,
+  countLikesForPost,
   createCommunityPost,
   deleteCommunityPost,
   getCommunityPostById,
   getDisplayNameForUser,
+  listCommentCountsByPostId,
   listCommunityPosts,
+  listLikedPostIdsForUser,
+  listLikeCountsByPostId,
+  likePost,
+  unlikePost,
   updateCommunityPostContent,
-  updatePostLikes,
 } from "@/services/communityPostsService";
 import { moderateContent } from "@/services/moderationService";
 import { censorContent, detectSensitiveContent } from "@/lib/contentModeration";
 import { sanitizeText } from "@/lib/sanitize";
+import { messageFromSupabaseError } from "@/lib/supabaseErrors";
 
 export interface ForumPost {
   id: string;
@@ -38,8 +45,14 @@ export function formatPostRow(row: {
   tags: string[] | null;
   created_at: string;
 }): ForumPost {
-  const sanitizedAuthor = sanitizeText(row.author_name);
-  const sanitizedContent = sanitizeText(row.content);
+  const sanitizedAuthor = sanitizeText(row.author_name ?? "");
+  const sanitizedContent = sanitizeText(row.content ?? "");
+  const createdAt = row.created_at ?? new Date().toISOString();
+  const createdAtDate = new Date(createdAt);
+  const timeAgo = Number.isNaN(createdAtDate.getTime())
+    ? "recently"
+    : formatDistanceToNow(createdAtDate, { addSuffix: true });
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -48,11 +61,11 @@ export function formatPostRow(row: {
       : sanitizedAuthor || "Community member",
     isAnonymous: row.is_anonymous,
     content: sanitizedContent,
-    likes: row.likes,
+    likes: Number.isFinite(row.likes) ? row.likes : 0,
     comments: 0,
-    timeAgo: formatDistanceToNow(new Date(row.created_at), { addSuffix: true }),
+    timeAgo,
     tags: (row.tags || []).map((tag) => sanitizeText(tag)).filter(Boolean),
-    createdAt: row.created_at,
+    createdAt,
   };
 }
 
@@ -67,11 +80,15 @@ export interface UseCommunityPostsReturn {
   fetchPostById: (postId: string) => Promise<ForumPost | null>;
   likedPosts: string[];
   toggleLike: (postId: string) => Promise<void>;
+  adjustPostCommentCount: (postId: string, delta: number) => void;
+  setPostCommentCount: (postId: string, count: number) => void;
   isPosting: boolean;
   setIsPosting: (v: boolean) => void;
   /** When not `"all"`, new posts get this tag so they appear in that discussion space. */
   newPostTopicId: PostSpaceId;
   setNewPostTopicId: (id: PostSpaceId) => void;
+  newPostTitle: string;
+  setNewPostTitle: (v: string) => void;
   newPost: string;
   setNewPost: (v: string) => void;
   postAnonymously: boolean;
@@ -94,17 +111,35 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
   const [loading, setLoading] = useState(true);
   const [isPosting, setIsPosting] = useState(false);
   const [newPostTopicId, setNewPostTopicId] = useState<PostSpaceId>("all");
+  const [newPostTitle, setNewPostTitle] = useState("");
   const [newPost, setNewPost] = useState("");
   const [postAnonymously, setPostAnonymously] = useState(true);
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [editingPost, setEditingPost] = useState<ForumPost | null>(null);
   const [editContent, setEditContent] = useState("");
-
   const fetchPosts = useCallback(async () => {
     try {
       const data = await listCommunityPosts();
-      setPosts(data.map(formatPostRow));
+      const postIds = data.map((row) => row.id);
+      const [commentCounts, likeCounts, likedIds] = await Promise.all([
+        listCommentCountsByPostId(postIds),
+        listLikeCountsByPostId(postIds),
+        user ? listLikedPostIdsForUser(user.id) : Promise.resolve([]),
+      ]);
+      const safePosts: ForumPost[] = [];
+      for (const row of data) {
+        try {
+          const next = formatPostRow(row);
+          next.comments = commentCounts[row.id] ?? 0;
+          next.likes = likeCounts[row.id] ?? 0;
+          safePosts.push(next);
+        } catch (rowError) {
+          console.error("Skipping malformed community post row:", rowError, row);
+        }
+      }
+      setPosts(safePosts);
+      setLikedPosts(likedIds);
     } catch (error) {
       console.error("Error fetching posts:", error);
       toast({
@@ -115,7 +150,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, user]);
 
   useEffect(() => {
     fetchPosts();
@@ -124,7 +159,15 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
   const fetchPostById = async (postId: string) => {
     try {
       const data = await getCommunityPostById(postId);
-      return data ? formatPostRow(data) : null;
+      if (!data) return null;
+      const post = formatPostRow(data);
+      const [commentCount, likeCount] = await Promise.all([
+        countCommentsForPost(postId),
+        countLikesForPost(postId),
+      ]);
+      post.comments = commentCount;
+      post.likes = likeCount;
+      return post;
     } catch (error) {
       console.error("Error fetching post:", error);
       toast({
@@ -137,6 +180,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
   };
 
   const toggleLike = async (postId: string) => {
+    if (!user) return;
     const isLiked = likedPosts.includes(postId);
     const previousLikedPosts = likedPosts;
     let previousLikes: number | null = null;
@@ -144,25 +188,24 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       isLiked ? prev.filter((id) => id !== postId) : [...prev, postId],
     );
 
-    let newLikes: number | null = null;
+    let optimisticLikes: number | null = null;
     setPosts((prev) =>
       prev.map((post) => {
         if (post.id !== postId) return post;
         previousLikes = post.likes;
         const nextLikes = isLiked ? Math.max(0, post.likes - 1) : post.likes + 1;
-        newLikes = nextLikes;
+        optimisticLikes = nextLikes;
         return { ...post, likes: nextLikes };
       }),
     );
 
     try {
-      if (newLikes !== null) {
-        await updatePostLikes(postId, newLikes);
-      }
+      if (isLiked) await unlikePost(postId, user.id);
+      else await likePost(postId, user.id);
     } catch (error) {
       // Roll back optimistic updates when persistence fails.
       setLikedPosts(previousLikedPosts);
-      if (previousLikes !== null) {
+      if (previousLikes !== null || optimisticLikes !== null) {
         setPosts((prev) =>
           prev.map((post) =>
             post.id === postId ? { ...post, likes: previousLikes as number } : post,
@@ -172,16 +215,35 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       console.error("Error updating like:", error);
       toast({
         title: "Couldn't update like",
-        description: "Please try again.",
+        description: messageFromSupabaseError(error),
         variant: "destructive",
       });
     }
   };
 
-  const submitPost = async () => {
-    if (!newPost.trim() || !user) return;
+  const adjustPostCommentCount = (postId: string, delta: number) => {
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? { ...post, comments: Math.max(0, (post.comments || 0) + delta) }
+          : post,
+      ),
+    );
+  };
 
-    const { hasCrisisContent } = detectSensitiveContent(newPost);
+  const setPostCommentCount = (postId: string, count: number) => {
+    setPosts((prev) =>
+      prev.map((post) => (post.id === postId ? { ...post, comments: Math.max(0, count) } : post)),
+    );
+  };
+
+  const submitPost = async () => {
+    const trimmedTitle = newPostTitle.trim();
+    const trimmedBody = newPost.trim();
+    if (!trimmedTitle || !trimmedBody || !user) return;
+    const composedContent = `${trimmedTitle}\n\n${trimmedBody}`;
+
+    const { hasCrisisContent } = detectSensitiveContent(composedContent);
     if (hasCrisisContent) {
       toast({
         title: "We care about you",
@@ -193,7 +255,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
 
     setSubmitting(true);
     try {
-      const moderation = await moderateContent(newPost);
+      const moderation = await moderateContent(composedContent);
       if (!moderation.clean) {
         const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
         toast({
@@ -210,7 +272,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
         authorName = profileDisplayName || user.user_metadata?.display_name || "User";
       }
 
-      const censoredContent = censorContent(newPost);
+      const censoredContent = censorContent(composedContent);
       const tagsForPost =
         newPostTopicId === "all" ? [] : [newPostTopicId];
 
@@ -236,6 +298,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       };
 
       setPosts((prev) => [newPostData, ...prev]);
+      setNewPostTitle("");
       setNewPost("");
       setNewPostTopicId("all");
       setIsPosting(false);
@@ -248,7 +311,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       console.error("Error creating post:", error);
       toast({
         title: "Error",
-        description: "Failed to create post. Please try again.",
+        description: messageFromSupabaseError(error),
         variant: "destructive",
       });
     } finally {
@@ -269,7 +332,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       console.error("Error deleting post:", error);
       toast({
         title: "Error",
-        description: "Failed to delete post.",
+        description: messageFromSupabaseError(error),
         variant: "destructive",
       });
     }
@@ -308,7 +371,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       console.error("Error updating post:", error);
       toast({
         title: "Error",
-        description: "Failed to update post.",
+        description: messageFromSupabaseError(error),
         variant: "destructive",
       });
     } finally {
@@ -323,10 +386,14 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     fetchPostById,
     likedPosts,
     toggleLike,
+    adjustPostCommentCount,
+    setPostCommentCount,
     isPosting,
     setIsPosting,
     newPostTopicId,
     setNewPostTopicId,
+    newPostTitle,
+    setNewPostTitle,
     newPost,
     setNewPost,
     postAnonymously,
