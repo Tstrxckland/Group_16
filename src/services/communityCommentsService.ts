@@ -43,3 +43,27 @@ export async function createComment(input: {
   if (error) throw error;
   return data as CommunityCommentRow;
 }
+
+export async function updateCommentContent(
+  commentId: string,
+  content: string,
+): Promise<CommunityCommentRow> {
+  const { data, error } = await (supabase
+    .from("community_post_comments" as any)
+    .update({ content })
+    .eq("id", commentId)
+    .select("*")
+    .single() as any);
+
+  if (error) throw error;
+  return data as CommunityCommentRow;
+}
+
+export async function deleteComment(commentId: string): Promise<void> {
+  const { error } = await (supabase
+    .from("community_post_comments" as any)
+    .delete()
+    .eq("id", commentId) as any);
+
+  if (error) throw error;
+}

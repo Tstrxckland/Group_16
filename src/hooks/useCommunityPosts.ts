@@ -167,28 +167,31 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     fetchPosts();
   }, [fetchPosts]);
 
-  const fetchPostById = async (postId: string) => {
-    try {
-      const data = await getCommunityPostById(postId);
-      if (!data) return null;
-      const post = formatPostRow(data);
-      const [commentCount, likeCount] = await Promise.all([
-        countCommentsForPost(postId),
-        countLikesForPost(postId),
-      ]);
-      post.comments = commentCount;
-      post.likes = likeCount;
-      return post;
-    } catch (error) {
-      console.error("Error fetching post:", error);
-      toast({
-        title: "Thread not found",
-        description: "It may have been removed.",
-        variant: "destructive",
-      });
-      return null;
-    }
-  };
+  const fetchPostById = useCallback(
+    async (postId: string) => {
+      try {
+        const data = await getCommunityPostById(postId);
+        if (!data) return null;
+        const post = formatPostRow(data);
+        const [commentCount, likeCount] = await Promise.all([
+          countCommentsForPost(postId),
+          countLikesForPost(postId),
+        ]);
+        post.comments = commentCount;
+        post.likes = likeCount;
+        return post;
+      } catch (error) {
+        console.error("Error fetching post:", error);
+        toast({
+          title: "Thread not found",
+          description: "It may have been removed.",
+          variant: "destructive",
+        });
+        return null;
+      }
+    },
+    [toast],
+  );
 
   const toggleLike = async (postId: string) => {
     if (!user) return;
@@ -232,7 +235,7 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     }
   };
 
-  const adjustPostCommentCount = (postId: string, delta: number) => {
+  const adjustPostCommentCount = useCallback((postId: string, delta: number) => {
     setPosts((prev) =>
       prev.map((post) =>
         post.id === postId
@@ -240,13 +243,13 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
           : post,
       ),
     );
-  };
+  }, []);
 
-  const setPostCommentCount = (postId: string, count: number) => {
+  const setPostCommentCount = useCallback((postId: string, count: number) => {
     setPosts((prev) =>
       prev.map((post) => (post.id === postId ? { ...post, comments: Math.max(0, count) } : post)),
     );
-  };
+  }, []);
 
   const submitPost = async () => {
     const trimmedTitle = newPostTitle.trim();
