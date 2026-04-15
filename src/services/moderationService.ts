@@ -15,14 +15,33 @@ export interface ModerationResult {
   resources?: Array<{ label: string; url: string }>;
 }
 
+const ALLOW_WHEN_UNAVAILABLE =
+  import.meta.env.DEV ||
+  String(import.meta.env.VITE_SKIP_EDGE_MODERATION || "").toLowerCase() === "true";
+
+function allowResult(): ModerationResult {
+  return { clean: true, flagged: [], outcome: "allowed" };
+}
+
 export async function moderateContent(content: string): Promise<ModerationResult> {
   const { data, error } = await supabase.functions.invoke("moderate-content", {
     body: { content },
   });
 
-  if (error) throw error;
+  if (error) {
+    // In local/dev, don't block posting when the edge function is unreachable or missing.
+    if (ALLOW_WHEN_UNAVAILABLE) {
+      console.warn("moderate-content unavailable, allowing content in dev mode:", error);
+      return allowResult();
+    }
+    throw error;
+  }
 
   const parsed = data as Partial<ModerationResult> | null;
+  if (!parsed && ALLOW_WHEN_UNAVAILABLE) {
+    return allowResult();
+  }
+
   return {
     clean: !!parsed?.clean,
     flagged: Array.isArray(parsed?.flagged) ? (parsed?.flagged as ModerationFlag[]) : [],

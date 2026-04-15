@@ -34,12 +34,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    getCurrentSession().then((session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // THEN check for existing session (and always clear loading on failure).
+    getCurrentSession()
+      .then((session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      })
+      .catch((error) => {
+        console.error("Error getting current session:", error);
+        setSession(null);
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     return () => subscription.unsubscribe();
   }, []);
