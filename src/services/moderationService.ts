@@ -15,9 +15,14 @@ export interface ModerationResult {
   resources?: Array<{ label: string; url: string }>;
 }
 
+const IS_TEST_ENV =
+  // In browser builds, `process` is undefined; this keeps the check safe.
+  typeof process !== "undefined" && process.env?.NODE_ENV === "test";
+
 const ALLOW_WHEN_UNAVAILABLE =
-  import.meta.env.DEV ||
-  String(import.meta.env.VITE_SKIP_EDGE_MODERATION || "").toLowerCase() === "true";
+  !IS_TEST_ENV &&
+  (import.meta.env.DEV ||
+    String(import.meta.env.VITE_SKIP_EDGE_MODERATION || "").toLowerCase() === "true");
 
 function allowResult(): ModerationResult {
   return { clean: true, flagged: [], outcome: "allowed" };
