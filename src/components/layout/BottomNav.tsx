@@ -19,14 +19,14 @@ const BottomNav = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/95 backdrop-blur-lg">
-      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
+      <div className="mx-auto flex w-full max-w-lg items-center px-2 py-2">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center rounded-xl px-3 py-2 text-xs font-medium transition-all duration-300",
+                "flex flex-1 flex-col items-center justify-center rounded-xl px-2 py-2 text-center text-xs font-medium transition-all duration-300",
                 discreetMode ? "gap-0" : "gap-1",
                 isActive
                   ? "bg-primary/10 text-primary"
