@@ -1,9 +1,11 @@
 import type { ModerationResult } from "@/services/moderationService";
+import type { ToastProps } from "@/components/ui/toast";
+import { toast as showToast } from "@/hooks/use-toast";
 
 export type ToastArgs = {
   title: string;
   description?: string;
-  variant?: string;
+  variant?: ToastProps["variant"];
   duration?: number;
 };
 
@@ -28,7 +30,7 @@ export async function submitReplyWithModeration<T>({
 }: {
   content: string;
   moderateContentFn: (text: string) => Promise<ModerationResult>;
-  toastFn: (args: ToastArgs) => void;
+  toastFn: typeof showToast;
   onAllowed: () => Promise<T>;
 }): Promise<{ blocked: boolean; result?: T }> {
   const moderation = await moderateContentFn(content);
