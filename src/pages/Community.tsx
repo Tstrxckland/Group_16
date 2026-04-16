@@ -21,6 +21,7 @@ import {
 } from "@/services/communityCommentsService";
 import { moderateContent } from "@/services/moderationService";
 import { sanitizeText } from "@/lib/sanitize";
+import { submitReplyWithModeration } from "@/lib/forum/replySubmission";
 import {
   Users,
   MessageCircle,
@@ -850,24 +851,21 @@ export function CommunityPostDetail() {
 
     setSubmittingComment(true);
     try {
-      const moderation = await moderateContent(trimmed);
-      if (!moderation.clean) {
-        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
-        toast({
-          title: "Reply blocked by moderation",
-          description: `Please revise your reply. Flagged categories: ${categories.join(", ")}.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const inserted = await createComment({
-        postId,
-        userId: user.id,
-        authorName: user.user_metadata?.display_name || "User",
-        isAnonymous: commentAnonymously,
+      const { blocked, result: inserted } = await submitReplyWithModeration({
         content: trimmed,
+        moderateContentFn: moderateContent,
+        toastFn: toast,
+        onAllowed: async () =>
+          createComment({
+            postId,
+            userId: user.id,
+            authorName: user.user_metadata?.display_name || "User",
+            isAnonymous: commentAnonymously,
+            content: trimmed,
+          }),
       });
+
+      if (blocked) return;
 
       setComments((prev) => [...prev, inserted]);
       adjustPostCommentCount(postId, 1);
@@ -903,18 +901,15 @@ export function CommunityPostDetail() {
 
     setSavingReply(true);
     try {
-      const moderation = await moderateContent(trimmed);
-      if (!moderation.clean) {
-        const categories = Array.from(new Set(moderation.flagged.map((f) => f.category)));
-        toast({
-          title: "Reply blocked by moderation",
-          description: `Please revise your reply. Flagged categories: ${categories.join(", ")}.`,
-          variant: "destructive",
-        });
-        return;
-      }
+      const { blocked, result: updated } = await submitReplyWithModeration({
+        content: trimmed,
+        moderateContentFn: moderateContent,
+        toastFn: toast,
+        onAllowed: async () => updateCommentContent(editingReplyId, trimmed),
+      });
 
-      const updated = await updateCommentContent(editingReplyId, trimmed);
+      if (blocked) return;
+
       setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       setEditingReplyId(null);
       setEditingReplyText("");
