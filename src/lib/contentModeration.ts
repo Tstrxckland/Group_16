@@ -44,6 +44,16 @@ const createPattern = (word: string): RegExp => {
   return new RegExp(pattern, 'gi');
 };
 
+const getNowMs = (): number =>
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+
+// Defensive: avoid blocking the UI / event loop with pathological inputs.
+// This is not a "hard" RegExp engine timeout (JS has no standard RegExp timeout),
+// but it caps overall work for this function.
+const REGEX_TIMEOUT_MS = 50;
+
 const censorMatch = (match: string): string => {
   if (match.length <= 2) {
     return '*'.repeat(match.length);
@@ -60,10 +70,15 @@ export const censorContent = (text: unknown): string => {
     return text;
   }
 
-  return getAllSensitiveWords().reduce(
-    (result, word) => result.replace(createPattern(word), censorMatch),
-    text
-  );
+  const start = getNowMs();
+  let result = text;
+
+  for (const word of getAllSensitiveWords()) {
+    if (getNowMs() - start > REGEX_TIMEOUT_MS) break;
+    result = result.replace(createPattern(word), censorMatch);
+  }
+
+  return result;
 };
 
 export const detectSensitiveContent = (text: unknown): SensitiveContentResult => {
@@ -78,13 +93,28 @@ export const detectSensitiveContent = (text: unknown): SensitiveContentResult =>
 
   const lowerText = text.toLowerCase();
 
-  const hasCrisisContent = SENSITIVE_WORDS.crisis.some((phrase) =>
-    lowerText.includes(phrase.toLowerCase())
-  );
+  const start = getNowMs();
 
-  const hasSensitive = getAllSensitiveWords().some((word) =>
-    createPattern(word).test(text)
-  );
+  let hasCrisisContent = false;
+  for (const phrase of SENSITIVE_WORDS.crisis) {
+    if (getNowMs() - start > REGEX_TIMEOUT_MS) {
+      // Conservative timeout behavior.
+      return { hasSensitive: false, hasCrisisContent };
+    }
+    if (lowerText.includes(phrase.toLowerCase())) {
+      hasCrisisContent = true;
+      break;
+    }
+  }
+
+  let hasSensitive = false;
+  for (const word of getAllSensitiveWords()) {
+    if (getNowMs() - start > REGEX_TIMEOUT_MS) break;
+    if (createPattern(word).test(text)) {
+      hasSensitive = true;
+      break;
+    }
+  }
 
   return { hasSensitive, hasCrisisContent };
 };

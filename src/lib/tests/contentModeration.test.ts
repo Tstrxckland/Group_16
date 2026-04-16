@@ -8,6 +8,14 @@ describe("contentModeration", () => {
     expect(result.hasCrisisContent).toBe(false);
   });
 
+  it("does not modify benign content", () => {
+    const benign = "Had a calm walk and felt better today.";
+    expect(censorContent(benign)).toBe(benign);
+    const result = detectSensitiveContent(benign);
+    expect(result.hasSensitive).toBe(false);
+    expect(result.hasCrisisContent).toBe(false);
+  });
+
   it("detects profanity and sensitive words", () => {
     const profanity = detectSensitiveContent("This is shit.");
     expect(profanity.hasSensitive).toBe(true);
@@ -53,4 +61,34 @@ describe("contentModeration", () => {
     expect(censored).toContain("s***");
     expect(censored).toContain("f***");
   });
+
+  it("censors crisis phrasing too", () => {
+    const censored = censorContent("I want to die and end my life.");
+    expect(censored.toLowerCase()).not.toContain("die");
+    expect(censored.toLowerCase()).not.toContain("end my life");
+    // Still returns a string (no crash).
+    expect(typeof censored).toBe("string");
+  });
+
+  it("does not block on pathological input (timeout budget)", () => {
+    const evil = `${"a".repeat(50_000)} kill me ${"b".repeat(50_000)}`;
+
+    const start1 = performance.now();
+    const res = detectSensitiveContent(evil);
+    const elapsed1 = performance.now() - start1;
+
+    const start2 = performance.now();
+    const censored = censorContent(evil);
+    const elapsed2 = performance.now() - start2;
+
+    // We only guarantee that the function returns quickly, not that it fully detects/censors
+    // under an attack-level payload.
+    expect(elapsed1).toBeLessThan(1000);
+    expect(elapsed2).toBeLessThan(1000);
+
+    expect(typeof res.hasSensitive).toBe("boolean");
+    expect(typeof res.hasCrisisContent).toBe("boolean");
+    expect(typeof censored).toBe("string");
+  });
 });
+
