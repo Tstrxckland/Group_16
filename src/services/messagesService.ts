@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface Message {
   id: string;
+  friendship_id: string;
   content: string;
   sender_profile_id: string;
   created_at: string;
@@ -18,14 +19,23 @@ export async function listMessages(friendshipId: string): Promise<Message[]> {
   return (data as Message[]) ?? [];
 }
 
-export async function sendMessage(friendshipId: string, senderProfileId: string, content: string) {
-  const { error } = await supabase.from("messages").insert({
-    friendship_id: friendshipId,
-    sender_profile_id: senderProfileId,
-    content,
-  });
+export async function sendMessage(
+  friendshipId: string,
+  senderProfileId: string,
+  content: string
+): Promise<Message> {
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      friendship_id: friendshipId,
+      sender_profile_id: senderProfileId,
+      content,
+    })
+    .select("*")
+    .single();
 
   if (error) throw error;
+  return data as Message;
 }
 
 export function subscribeToMessages(
