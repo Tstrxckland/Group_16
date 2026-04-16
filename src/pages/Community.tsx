@@ -19,6 +19,7 @@ import {
   updateCommentContent,
   type CommunityCommentRow,
 } from "@/services/communityCommentsService";
+import { getDisplayNameForUser } from "@/services/communityPostsService";
 import { moderateContent } from "@/services/moderationService";
 import { sanitizeText } from "@/lib/sanitize";
 import { submitReplyWithModeration } from "@/lib/forum/replySubmission";
@@ -851,6 +852,12 @@ export function CommunityPostDetail() {
 
     setSubmittingComment(true);
     try {
+      const authorName = commentAnonymously
+        ? user.user_metadata?.username || user.user_metadata?.display_name || "User"
+        : await getDisplayNameForUser(user.id) ||
+          user.user_metadata?.username ||
+          user.user_metadata?.display_name ||
+          "User";
       const { blocked, result: inserted } = await submitReplyWithModeration({
         content: trimmed,
         moderateContentFn: moderateContent,
@@ -859,7 +866,7 @@ export function CommunityPostDetail() {
           createComment({
             postId,
             userId: user.id,
-            authorName: user.user_metadata?.display_name || "User",
+            authorName,
             isAnonymous: commentAnonymously,
             content: trimmed,
           }),

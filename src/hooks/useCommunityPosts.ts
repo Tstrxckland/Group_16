@@ -13,6 +13,7 @@ import {
   listCommunityPosts,
   listLikedPostIdsForUser,
   listLikeCountsByPostId,
+  listUsernamesByUserId,
   likePost,
   unlikePost,
   updateCommunityPostContent,
@@ -44,8 +45,12 @@ export function formatPostRow(row: {
   likes: number;
   tags: string[] | null;
   created_at: string;
-}): ForumPost {
-  const sanitizedAuthor = sanitizeText(row.author_name ?? "");
+}, resolvedUsername?: string | null): ForumPost {
+  const authorName =
+    !row.is_anonymous && (!row.author_name || row.author_name === "User")
+      ? resolvedUsername ?? row.author_name
+      : row.author_name;
+  const sanitizedAuthor = sanitizeText(authorName ?? "");
   const sanitizedContent = sanitizeText(row.content ?? "");
   const createdAt = row.created_at ?? new Date().toISOString();
   const createdAtDate = new Date(createdAt);
@@ -133,15 +138,23 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
     try {
       const data = await listCommunityPosts();
       const postIds = data.map((row) => row.id);
-      const [commentCounts, likeCounts, likedIds] = await Promise.all([
+      const missingAuthorUserIds = Array.from(
+        new Set(
+          data
+            .filter((row) => !row.is_anonymous && (!row.author_name || row.author_name === "User"))
+            .map((row) => row.user_id),
+        ),
+      );
+      const [commentCounts, likeCounts, likedIds, usernamesByUserId] = await Promise.all([
         listCommentCountsByPostId(postIds),
         listLikeCountsByPostId(postIds),
         user ? listLikedPostIdsForUser(user.id) : Promise.resolve([]),
+        listUsernamesByUserId(missingAuthorUserIds),
       ]);
       const safePosts: ForumPost[] = [];
       for (const row of data) {
         try {
-          const next = formatPostRow(row);
+          const next = formatPostRow(row, usernamesByUserId[row.user_id]);
           next.comments = commentCounts[row.id] ?? 0;
           next.likes = likeCounts[row.id] ?? 0;
           safePosts.push(next);
@@ -172,7 +185,11 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       try {
         const data = await getCommunityPostById(postId);
         if (!data) return null;
-        const post = formatPostRow(data);
+        const resolvedUsername =
+          !data.is_anonymous && (!data.author_name || data.author_name === "User")
+            ? await getDisplayNameForUser(data.user_id)
+            : null;
+        const post = formatPostRow(data, resolvedUsername);
         const [commentCount, likeCount] = await Promise.all([
           countCommentsForPost(postId),
           countLikesForPost(postId),
@@ -283,7 +300,11 @@ export function useCommunityPosts(): UseCommunityPostsReturn {
       let authorName = null;
       if (!postAnonymously) {
         const profileDisplayName = await getDisplayNameForUser(user.id);
-        authorName = profileDisplayName || user.user_metadata?.display_name || "User";
+        authorName =
+          profileDisplayName ||
+          user.user_metadata?.username ||
+          user.user_metadata?.display_name ||
+          "User";
       }
 
       const censoredContent = censorContent(composedContent);

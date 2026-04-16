@@ -122,11 +122,31 @@ export async function listCommentCountsByPostId(postIds: string[]): Promise<Reco
 export async function getDisplayNameForUser(userId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("username")
     .eq("user_id", userId)
     .maybeSingle();
   if (error && error.code !== "PGRST116") throw error;
-  return (data?.display_name as string | undefined) ?? null;
+  return (data?.username as string | undefined) ?? null;
+}
+
+export async function listUsernamesByUserId(userIds: string[]): Promise<Record<string, string>> {
+  if (userIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, username")
+    .in("user_id", userIds);
+
+  if (error) throw error;
+
+  const usernames: Record<string, string> = {};
+  for (const row of (data as Array<{ user_id: string; username: string | null }>) ?? []) {
+    if (row.username) {
+      usernames[row.user_id] = row.username;
+    }
+  }
+
+  return usernames;
 }
 
 export async function createCommunityPost(input: {
