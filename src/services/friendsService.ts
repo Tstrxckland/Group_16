@@ -129,7 +129,7 @@ export async function loadFriendsDashboard(userId: string): Promise<{
 export async function updateProfileUsername(profileId: string, username: string): Promise<ProfileRow | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .update({ username })
+    .update({ username, display_name: username })
     .eq("id", profileId)
     .select("id, user_id, username, display_name")
     .maybeSingle();

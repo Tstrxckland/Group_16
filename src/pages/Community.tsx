@@ -19,6 +19,7 @@ import {
   updateCommentContent,
   type CommunityCommentRow,
 } from "@/services/communityCommentsService";
+import { getDisplayNameForUser } from "@/services/communityPostsService";
 import { moderateContent } from "@/services/moderationService";
 import { sanitizeText } from "@/lib/sanitize";
 import {
@@ -861,10 +862,17 @@ export function CommunityPostDetail() {
         return;
       }
 
+      const authorName = commentAnonymously
+        ? user.user_metadata?.username || user.user_metadata?.display_name || "User"
+        : await getDisplayNameForUser(user.id) ||
+          user.user_metadata?.username ||
+          user.user_metadata?.display_name ||
+          "User";
+
       const inserted = await createComment({
         postId,
         userId: user.id,
-        authorName: user.user_metadata?.display_name || "User",
+        authorName,
         isAnonymous: commentAnonymously,
         content: trimmed,
       });
