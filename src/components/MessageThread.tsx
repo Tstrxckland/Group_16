@@ -42,7 +42,7 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
     loadMessages();
 
     const unsubscribe = subscribeToMessages(friendshipId, (message) => {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     });
 
     return () => {
@@ -73,7 +73,8 @@ export function MessageThread({ friendshipId, friendName, myProfileId, onClose }
         return;
       }
 
-      await sendMessage(friendshipId, myProfileId, trimmed);
+      const inserted = await sendMessage(friendshipId, myProfileId, trimmed);
+      setMessages((prev) => (prev.some((m) => m.id === inserted.id) ? prev : [...prev, inserted]));
       setNewMessage("");
     } catch (error) {
       console.error("Error sending message:", error);
