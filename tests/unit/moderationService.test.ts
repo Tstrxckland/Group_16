@@ -74,17 +74,12 @@ describe("moderationService.moderateContent", () => {
     expect(result.resources?.[0]?.url).toBe("https://findahelpline.com");
   });
 
-  it("throws when edge function returns an error", async () => {
+  it("throws when edge function returns an error in test env", async () => {
     invokeMock.mockResolvedValue({
       data: null,
       error: new Error("network error"),
     });
 
-    // In dev mode, moderation failures allow content rather than block UX.
-    await expect(moderateContent("test")).resolves.toEqual({
-      clean: true,
-      flagged: [],
-      outcome: "allowed",
-    });
+    await expect(moderateContent("test")).rejects.toThrow("network error");
   });
 });
